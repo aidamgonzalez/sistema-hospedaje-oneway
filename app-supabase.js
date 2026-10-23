@@ -3,7 +3,7 @@
   const URL_ = window.SUPABASE_URL || '', KEY = window.SUPABASE_ANON_KEY || '';
   const libOk = !!(window.supabase && window.supabase.createClient);
   const configured = libOk && !!(URL_ && KEY);
-  const sb = configured ? window.supabase.createClient(URL_, KEY) : null;
+  const sb = configured ? window.supabase.createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'hospedaje-ow-auth', lock: async (name, timeout, fn) => fn() } }) : null;
   window.__sbClient = sb;
   const S = { user: null, perfil: null };
   let resolveReady; const ready = new Promise(r => resolveReady = r);
@@ -108,10 +108,15 @@
   document.addEventListener('DOMContentLoaded', async () => {
     if (!configured) { showLogin(libOk ? 'Falta configurar Supabase: completa el archivo supabase-config.js.' : 'No se pudo conectar con Supabase. Revisa tu conexión a internet y recarga la página.'); $('#lForm').hidden = true; return; }
     $('#lForm').addEventListener('submit', async e => {
-      e.preventDefault(); $('#lBtn').disabled = true; $('#loginMsg').textContent = '';
-      const { error } = await sb.auth.signInWithPassword({ email: $('#lEmail').value.trim(), password: $('#lPass').value });
-      if (error) $('#loginMsg').textContent = /invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : (/confirm/i.test(error.message) ? 'Tu correo aún no está confirmado.' : 'No se pudo iniciar sesión: ' + error.message);
-      $('#lBtn').disabled = false;
+      e.preventDefault(); $('#lBtn').disabled = true; $('#lBtn').textContent = 'Entrando…'; $('#loginMsg').textContent = '';
+      const email = $('#lEmail').value.trim().toLowerCase().replace(/\s+/g, '');
+      try {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: $('#lPass').value });
+        if (error) {
+          $('#loginMsg').textContent = /invalid login|invalid_credentials|invalid credentials/i.test(error.message) ? 'Correo o contraseña incorrectos. Revisa que no haya espacios ni mayúsculas de más.' : (/confirm/i.test(error.message) ? 'Tu correo aún no está confirmado.' : 'No se pudo iniciar sesión: ' + error.message);
+        } else if (data && data.session) { await entrar(data.session); }
+      } catch (err) { $('#loginMsg').textContent = 'No se pudo conectar: ' + (err && err.message || err) + '. Revisa tu internet e inténtalo de nuevo.'; }
+      finally { $('#lBtn').disabled = false; $('#lBtn').textContent = 'Entrar'; }
     });
     $('#lForgot').addEventListener('click', async () => {
       const em = $('#lEmail').value.trim(); if (!em) { $('#loginMsg').textContent = 'Escribe tu correo y vuelve a pulsar “Olvidé mi contraseña”.'; return; }

@@ -28,7 +28,7 @@ html,body{margin:0}
 #loginBox h1 .a{color:var(--sand)} #loginBox h1 .b{color:var(--navy)}
 #loginBox p{margin:0;color:var(--muted);font-size:13px}
 #loginBox form{display:flex;flex-direction:column;gap:12px}
-#loginBox input{width:100%}
+#loginBox input{width:100%;font-size:16px}
 #loginMsg{color:var(--bad);font-size:13px;min-height:1em}
 #usSheet table td{white-space:normal}
 #usSheet .addu{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -44,8 +44,8 @@ html,body{margin:0}
     <h1><span class="a">ONE</span><span class="b">WAY</span> · Hospedaje</h1>
     <p>Entra con el correo y la contraseña que te dio el administrador.</p>
     <form id="lForm" autocomplete="on">
-      <div class="f"><label for="lEmail">Correo</label><input id="lEmail" type="email" autocomplete="username" required></div>
-      <div class="f"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+      <div class="f"><label for="lEmail">Correo</label><input id="lEmail" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></div>
+      <div class="f"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" required></div>
       <button class="primary" id="lBtn" type="submit">Entrar</button>
       <button class="ghost" id="lForgot" type="button">Olvidé mi contraseña</button>
     </form>
