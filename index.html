@@ -241,6 +241,8 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .klist{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--surface)}
 .kbar{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
 .kn{color:var(--muted);font-size:12px;margin-left:4px}
+.nsbox{background:var(--bad-bg);border-radius:8px;padding:8px 12px;color:var(--bad)}
+.nsbox input{accent-color:#B3261E}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -403,6 +405,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="f"><label for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
   <label class="check pendf"><input type="checkbox" id="fPend"> Solo por pagar</label>
   <div class="f"><label for="fRet">Retención</label><select id="fRet"><option value="">Todas</option><option value="pend">Pendiente</option><option value="ok">Lista</option></select></div>
+  <div class="f"><label for="fNS">No show</label><select id="fNS"><option value="">Todos</option><option value="si">Solo no show</option><option value="no">Sin no show</option></select></div>
   <label class="check"><input type="checkbox" id="fCruce"> Solo fechas cruzadas</label>
   <button class="ghost" id="clearBtn" type="button">Limpiar</button>
   <button class="ghost" id="unifBtn" type="button">Unificar nombres</button>
@@ -485,10 +488,10 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f full"><label for="eHotel">Hotel</label><input id="eHotel" list="dlHotel" required placeholder="Escribe o elige un hotel"></div>
     <div class="f"><label for="eContrato">Contrato</label><input id="eContrato" list="dlContrato" placeholder="P1 LAURA, OW, METOR…"></div>
     <div class="f"><label for="eStatus">Status</label><input id="eStatus" list="dlStatus" value="POR PAGAR"></div>
-    <div class="f full"><span class="qlabel">Marcar status</span><div class="quick" id="quickStatus">
+    <label class="check full nsbox"><input type="checkbox" id="eNoShow"> <b>NO SHOW</b> &nbsp;<span class="hint">el huésped no llegó (aparte del status de pago)</span></label>
+    <div class="f full"><span class="qlabel">Status de pago</span><div class="quick" id="quickStatus">
       <button type="button" class="chip ok" data-s="PAGADO">PAGADO</button>
       <button type="button" class="chip warn" data-s="POR PAGAR">POR PAGAR</button>
-      <button type="button" class="chip bad" data-s="NO SHOW">NO SHOW</button>
       <button type="button" class="chip warn" data-s="PENDIENTE">PENDIENTE</button>
       <button type="button" class="chip ok" data-s="PAGADO CON SF">PAGADO CON SF</button>
     </div></div>
@@ -584,6 +587,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <form id="kform" onsubmit="return false" style="display:flex;flex-direction:column;gap:12px">
     <div class="f"><label for="kField">Qué quieres unificar</label><select id="kField"><option value="contrato">Contratos</option><option value="status">Status</option><option value="obs">Observaciones</option></select></div>
     <p class="hint">Marca los nombres que significan lo mismo, escribe el nombre final y pulsa <b>Unir</b>. Se cambian todas las reservas del año seleccionado.</p>
+    <div class="gbox" id="kNS" hidden></div>
     <div class="sec">Sugerencias (nombres parecidos)</div>
     <div id="kSug"></div>
     <div class="sec">Unir manualmente</div>
@@ -643,7 +647,8 @@ async function writeCatalog(sid,meta){
 /* ---------- cruces de fechas por huésped ---------- */
 const normName=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9Ñ ]/g,' ').replace(/\s+/g,' ').trim();
 function paxNames(p){return String(p||'').split(/\s+-\s+|\s*[,;\/]\s*|\s+Y\s+/i).map(normName).filter(n=>n.length>=5&&n.includes(' ')&&!/\d/.test(n)&&!/^(FLIA|FAMILIA|GRUPO|PILOTOS?|TRIPULACION)\b/.test(n))}
-const isNoShow=r=>/NO SHOW/i.test(r.status||'')||/NO SHOW/i.test(r.obs||'');
+const isNoShow=r=>r.noshow===true||/NO SHOW/i.test(r.status||'')||(r.noshow!==false&&/NO SHOW/i.test(r.obs||''));
+const stLimpio=st=>/^\s*NO SHOW\s*$/i.test(st||'')?'':(st||'');
 const _eo=(i,o)=>o>i?o:i+'z';
 const overl=(a1,b1,a2,b2)=>!!(a1&&b1&&a2&&b2)&&a1<_eo(a2,b2)&&a2<_eo(a1,b1);
 
@@ -682,12 +687,12 @@ function fillFilters(){
   const AH=allHotels(), hs=Object.values(AH).map(h=>h.nombre).sort((a,b)=>a.localeCompare(b,'es'));
   $('#dlHotelF').innerHTML=hs.map(h=>`<option value="${esc(h)}">`).join('');
   $('#dlEstado').innerHTML=[...new Set(Object.values(AH).map(h=>h.estado).filter(Boolean))].sort().map(h=>`<option value="${esc(h)}">`).join('');
-  fillSelect('#fContrato',uniq('contrato')); fillSelect('#fStatus',uniq('status'));
+  fillSelect('#fContrato',uniq('contrato')); fillSelect('#fStatus',uniq('status').filter(v=>stLimpio(v)));
   const ms=[...new Set(rows.map(r=>r.in&&r.in.slice(0,7)).filter(Boolean))].sort().reverse();
   fillSelect('#fMes',ms,m=>MESES[+m.slice(5,7)-1]+' '+m.slice(0,4));
   $('#dlHotel').innerHTML=hs.map(h=>`<option value="${esc(h)}">`).join('');
   $('#dlContrato').innerHTML=uniq('contrato').slice(0,80).map(h=>`<option value="${esc(h)}">`).join('');
-  $('#dlStatus').innerHTML=uniq('status').map(h=>`<option value="${esc(h)}">`).join('');
+  $('#dlStatus').innerHTML=uniq('status').filter(v=>stLimpio(v)).map(h=>`<option value="${esc(h)}">`).join('');
   $('#dlObs').innerHTML=uniq('obs').slice(0,40).map(h=>`<option value="${esc(h)}">`).join('');
 }
 function filtered(){
@@ -696,8 +701,8 @@ function filtered(){
     if(ft==='stay'){ if(!r.in||!r.out) return false; const last=r.out>r.in?r.out:r.in; return (!fb||r.in<=fb)&&(!fa||last>fa||(r.in===r.out&&r.in>=fa)) }
     const v=r[ft]; return !!v&&(!fa||v>=fa)&&(!fb||v<=fb) };
   const q=$('#q').value.trim().toUpperCase(), h=upN($('#fHotel').value), hx=h&&allHotels()[h]?true:false, c=$('#fContrato').value, s=$('#fStatus').value, m=$('#fMes').value, x=$('#fCruce').checked;
-  const pend=$('#fPend').checked, fr=$('#fRet').value;
-  return rows.filter(r=>inRange(r)&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
+  const pend=$('#fPend').checked, fr=$('#fRet').value, fns=$('#fNS').value;
+  return rows.filter(r=>inRange(r)&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
     (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel,(r.facturas||[]).map(e=>e.numero+' '+e.concepto).join(' ')].some(v=>v&&String(v).toUpperCase().includes(q))));
 }
 
@@ -751,7 +756,7 @@ function render(){
     <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
     <td class="pax">${esc(x.pasajero)}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
     <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
-    <td>${x.status?`<span class="chip ${chipClass(x.status)}">${esc(x.status)}</span>`:''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
+    <td>${stLimpio(x.status)?`<span class="chip ${chipClass(x.status)}">${esc(stLimpio(x.status))}</span>`:''}${isNoShow(x)?' <span class="chip bad">NO SHOW</span>':''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
     }
     i+=span-1;
   }
@@ -768,7 +773,7 @@ function render(){
 function renderHotels(list){
   const g={};
   for(const r of list){const k=upN(r.hotel);const h=g[k]=g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0};h.n++;h.noches+=num(r.noches)||0;h.usd+=r.tusd||0;h.bs+=r.tbs||0;if(r.isPend){h.pend++;h.pu+=r.pusd||0;h.pb+=r.pbs||0;h.pr+=r.pret||0}}
-  const hf=upN($('#fHotel').value), others=$('#fPend').checked||$('#fRet').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
+  const hf=upN($('#fHotel').value), others=$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
   const AH=allHotels();
   const arr=Object.entries(AH).filter(([k])=>(!hf||k.includes(hf))&&(!others||g[k])).map(([k,m])=>[m,g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0}])
     .sort($('#fPend').checked?((a,b)=>b[1].pb-a[1].pb||b[1].pu-a[1].pu||b[1].pend-a[1].pend):((a,b)=>b[1].n-a[1].n||a[0].nombre.localeCompare(b[0].nombre,'es')));
@@ -854,6 +859,7 @@ function openSheet(r,pre){
   $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; bsAuto=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
+  $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
   $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
   $('#scrim').hidden=false; $('#sheet').hidden=false; setTimeout(()=>(r||pre?F.ePax:F.eHotel).focus(),50);
 }
@@ -865,7 +871,7 @@ function nights(){ if(F.eIn.value&&F.eOut.value){const n=Math.round((new Date(F.
 let cruceOk=false, cruceSig='';
 function findCruces(){
   const ns=paxNames(F.ePax.value), a=F.eIn.value, b=F.eOut.value; if(!ns.length||!a||!b) return [];
-  if(/NO SHOW/i.test(F.eStatus.value)) return [];
+  if($('#eNoShow').checked) return [];
   const res=[]; const seen=new Set();
   for(const r of rows){ if(editing&&r.id===editing.id&&r.slug===editing.slug) continue; if(isNoShow(r)||!r.in||!r.out) continue;
     const rn=r._names||paxNames(r.pasajero); for(const n of ns){ if(rn.includes(n)&&overl(a,b,r.in,r.out)){ const k=r.slug+'|'+r.id+'|'+n; if(!seen.has(k)){seen.add(k);res.push({n,r})} } } }
@@ -896,7 +902,7 @@ function checkCruce(){
   if(L.length) box.innerHTML=`<b>⚠ Fechas cruzadas:</b> ${L.length===1?'este huésped ya tiene':'estos huéspedes ya tienen'} otra reserva en esas fechas.<ul style="margin:6px 0 0;padding-left:18px">${L.slice(0,8).map(c=>`<li><b>${esc(c.n)}</b> · ${esc(c.r.hotel)} · ${fd(c.r.in)} al ${fd(c.r.out)}${c.r.contrato?' · '+esc(c.r.contrato):''}${c.r.status?' · '+esc(c.r.status):''}</li>`).join('')}${L.length>8?`<li>y ${L.length-8} más…</li>`:''}</ul>`;
 }
 
-F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce); [F.eIn,F.eOut,F.ePax,F.eHotel].forEach(el=>['change','input'].forEach(ev=>el.addEventListener(ev,()=>{clearTimeout(renderExt.t);renderExt.t=setTimeout(renderExt,300)}))); F.ePax.addEventListener('input',()=>{clearTimeout(checkCruce.t);checkCruce.t=setTimeout(checkCruce,350)}); F.eStatus.addEventListener('change',checkCruce);
+F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce); [F.eIn,F.eOut,F.ePax,F.eHotel].forEach(el=>['change','input'].forEach(ev=>el.addEventListener(ev,()=>{clearTimeout(renderExt.t);renderExt.t=setTimeout(renderExt,300)}))); F.ePax.addEventListener('input',()=>{clearTimeout(checkCruce.t);checkCruce.t=setTimeout(checkCruce,350)}); F.eStatus.addEventListener('change',checkCruce); $('#eNoShow').addEventListener('change',()=>{checkCruce();renderExt()});
 /* Regla de montos: el monto en Bs manda; Monto $ = Monto Bs ÷ Tasa. Solo si no hay Bs, se calcula Bs = $ × Tasa. */
 let bsAuto=null;
 function usdDesdeBs(){const t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(b>0&&t>0){F.eUsd.value=(b/t).toFixed(2);return true}return false}
@@ -934,7 +940,7 @@ function collect(){
   const r={contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
   for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
   for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
-  const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.ret_comp=$('#eRetComp').value.trim()||null;
+  const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null;
   return r;
 }
 async function save(){
@@ -974,7 +980,7 @@ async function exportXlsx(){
   if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel.');return}
   const wb=XLSX.utils.book_new();
   const hs=Object.entries(hotels).sort((a,b)=>(a[1].orden??999)-(b[1].orden??999));
-  const head=['CONTRATO','NOMBRE DEL PASAJERO','IN','OUT','STATUS','OBSERVACION','MONTO','MONTO BS','BCV','FACTURA','NOCHES','TARIFA','PRESUPUESTO','FACTURAS ADICIONALES','TOTAL MONTO','TOTAL BS','RETENCION LISTA','COMPROBANTE RET.'];
+  const head=['CONTRATO','NOMBRE DEL PASAJERO','IN','OUT','STATUS','OBSERVACION','MONTO','MONTO BS','BCV','FACTURA','NOCHES','TARIFA','PRESUPUESTO','FACTURAS ADICIONALES','TOTAL MONTO','TOTAL BS','RETENCION LISTA','COMPROBANTE RET.','NO SHOW'];
   const used=new Set();
   const all=[['HOTEL',...head]];
   for(const [sid,h] of hs){
@@ -982,7 +988,7 @@ async function exportXlsx(){
     const gmin={}; for(const r of rs0) if(r.grupo&&(gmin[r.grupo]==null||(r.in||'')<gmin[r.grupo])) gmin[r.grupo]=r.in||'';
     const kk=r=>(r.grupo?gmin[r.grupo]:(r.in||''))+'|'+(r.grupo||'~'+r.id)+'|'+(r.in||'');
     const rs=rs0.sort((a,b)=>kk(a)<kk(b)?-1:kk(a)>kk(b)?1:0);
-    const toRow=r=>[r.contrato,r.pasajero,r.in?new Date(r.in+'T12:00:00'):null,r.out?new Date(r.out+'T12:00:00'):null,r.status,r.obs,r.usd,r.bs,r.bcv,r.factura,r.noches,r.tarifa,r.presupuesto,(r.facturas||[]).map(e=>`${e.concepto||'ADICIONAL'}${e.numero?' #'+e.numero:''}: ${e.usd??''}${e.bs!=null?' / Bs '+e.bs:''} (${e.status})`).join('; ')||null,(r.facturas||[]).length?r.tusd:null,(r.facturas||[]).length?r.tbs:null,r.retAplica?(r.retDone?'SI':(r.retPend&&RPany(r)?'PARCIAL':'NO')):null,[r.ret_comp,...(r.facturas||[]).map(e=>e.ret_comp)].filter(Boolean).join(', ')||null];
+    const toRow=r=>[r.contrato,r.pasajero,r.in?new Date(r.in+'T12:00:00'):null,r.out?new Date(r.out+'T12:00:00'):null,stLimpio(r.status)||null,r.obs,r.usd,r.bs,r.bcv,r.factura,r.noches,r.tarifa,r.presupuesto,(r.facturas||[]).map(e=>`${e.concepto||'ADICIONAL'}${e.numero?' #'+e.numero:''}: ${e.usd??''}${e.bs!=null?' / Bs '+e.bs:''} (${e.status})`).join('; ')||null,(r.facturas||[]).length?r.tusd:null,(r.facturas||[]).length?r.tbs:null,r.retAplica?(r.retDone?'SI':(r.retPend&&RPany(r)?'PARCIAL':'NO')):null,[r.ret_comp,...(r.facturas||[]).map(e=>e.ret_comp)].filter(Boolean).join(', ')||null,isNoShow(r)?'SI':null];
     const hd=[...head]; hd[6]=h.moneda==='EUR'?'MONTO €':'MONTO $';
     const data=rs.map(toRow), merges=[];
     for(let i=0;i<rs.length;){ let j=i+1; if(rs[i].grupo) while(j<rs.length&&rs[j].grupo===rs[i].grupo) j++;
@@ -992,7 +998,7 @@ async function exportXlsx(){
         for(const c of [6,7,8,9,12]) merges.push({s:{r:i+1,c},e:{r:j,c}}); }
       i=j; }
     const ws=XLSX.utils.aoa_to_sheet([hd,...data],{cellDates:true,dateNF:'dd/mm/yyyy'}); ws['!merges']=merges;
-    ws['!cols']=[{wch:14},{wch:40},{wch:11},{wch:11},{wch:12},{wch:20},{wch:11},{wch:14},{wch:9},{wch:9},{wch:7},{wch:9},{wch:12},{wch:40},{wch:12},{wch:14},{wch:10},{wch:18}];
+    ws['!cols']=[{wch:14},{wch:40},{wch:11},{wch:11},{wch:12},{wch:20},{wch:11},{wch:14},{wch:9},{wch:9},{wch:7},{wch:9},{wch:12},{wch:40},{wch:12},{wch:14},{wch:10},{wch:18},{wch:9}];
     let name=h.nombre.replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31).trim()||'HOTEL'; while(used.has(name)) name=name.slice(0,28)+'_'+used.size; used.add(name);
     XLSX.utils.book_append_sheet(wb,ws,name);
     rs.forEach(r=>all.push([h.nombre,...toRow(r)]));
@@ -1007,9 +1013,9 @@ async function exportXlsx(){
 }
 
 /* ---------- events ---------- */
-['#fDesde','#fHasta','#fTipo','#fRet'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
+['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
 ['#q','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'?'input':'change',()=>{page=0;render()}));
-$('#clearBtn').onclick=()=>{$('#q').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';page=0;render()};
+$('#clearBtn').onclick=()=>{$('#q').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
 $('#tbl thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th)return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};render()});
 $('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k);updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
 $('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
@@ -1094,7 +1100,7 @@ function renderReport(){
   const tu=groups.reduce((s,g)=>s+(g.moneda==='USD'?g.usd:0),0), te=groups.reduce((s,g)=>s+(g.moneda==='EUR'?g.usd:0),0), tb=groups.reduce((s,g)=>s+g.bs,0), tr=groups.reduce((s,g)=>s+g.ret,0);
   $('#rBody').innerHTML=groups.map(g=>`<div class="rhotel"><h3>${esc(g.hotel)}<span class="sub">${esc(g.estado)} · ${g.list.length} ${g.list.length===1?'reserva':'reservas'}</span>${pctChip(g.pct)}${showMoney&&(g.usd||g.bs)?`<span class="tot">${money(g.usd,g.moneda)}${g.bs?' · Bs '+fmt2.format(g.bs):''}${g.ret?' · A pagar Bs '+fmt2.format(g.net):''}</span>`:''}</h3>
     <div class="tablebox"><table><thead><tr><th>Contrato</th><th>Pasajero</th><th>Check-in</th><th>Check-out</th><th class="num">Noches</th><th>Status</th><th>Observación</th><th class="num">Monto</th><th class="num">Monto Bs</th><th class="num">Retención Bs</th><th class="num">A pagar Bs</th><th>Factura</th></tr></thead><tbody>
-    ${g.list.map(r=>`<tr data-id="${esc(r.slug+'|'+r.id)}"><td>${esc(r.contrato)}</td><td class="pax">${esc(r.pasajero)}${r.nota?`<span class="sub">${esc(r.nota)}</span>`:''}</td><td>${fd(r.in)}</td><td>${fd(r.out)}</td><td class="num">${r.noches??''}</td><td>${r.status?`<span class="chip ${chipClass(r.status)}">${esc(r.status)}</span>`:''}</td><td>${esc(r.obs)}</td><td class="num">${r.rusd?money(r.rusd,r.moneda):(r.nota?'':'<span class="mut">sin monto</span>')}</td><td class="num">${r.rbs?fmt2.format(r.rbs):''}</td><td class="num">${r.rret?fmt2.format(r.rret):''}</td><td class="num">${r.rnet!=null?fmt2.format(r.rnet):''}</td><td>${esc(r.factura)}</td></tr>`).join('')}
+    ${g.list.map(r=>`<tr data-id="${esc(r.slug+'|'+r.id)}"><td>${esc(r.contrato)}</td><td class="pax">${esc(r.pasajero)}${r.nota?`<span class="sub">${esc(r.nota)}</span>`:''}</td><td>${fd(r.in)}</td><td>${fd(r.out)}</td><td class="num">${r.noches??''}</td><td>${stLimpio(r.status)?`<span class="chip ${chipClass(r.status)}">${esc(stLimpio(r.status))}</span>`:''}${isNoShow(r)?' <span class="chip bad">NO SHOW</span>':''}</td><td>${esc(r.obs)}</td><td class="num">${r.rusd?money(r.rusd,r.moneda):(r.nota?'':'<span class="mut">sin monto</span>')}</td><td class="num">${r.rbs?fmt2.format(r.rbs):''}</td><td class="num">${r.rret?fmt2.format(r.rret):''}</td><td class="num">${r.rnet!=null?fmt2.format(r.rnet):''}</td><td>${esc(r.factura)}</td></tr>`).join('')}
     </tbody></table></div></div>`).join('')+
     `<div class="rgrand"><span><b>${n}</b> ${n===1?'reserva':'reservas'}</span><span><b>${groups.length}</b> ${groups.length===1?'hotel':'hoteles'}</span>${tu?`<span>Total $ <b>${fmt2.format(tu)}</b></span>`:''}${te?`<span>Total € <b>${fmt2.format(te)}</b></span>`:''}${tb?`<span>Total Bs <b>${fmt2.format(tb)}</b></span>`:''}${tr?`<span>Retenciones Bs <b>${fmt2.format(tr)}</b></span><span>A pagar Bs <b>${fmt2.format(tb-tr)}</b></span>`:''}</div>`;
 }
@@ -1136,7 +1142,7 @@ async function reportPdf(){
     doc.autoTable({startY:y,margin:{left:40,right:40},theme:'grid',
       head:[[{content:g.hotel+(g.estado?'  ·  '+g.estado:'')+'   ('+g.list.length+')   ·   Retención: '+pctLbl(g.pct),colSpan:6,styles:{halign:'left'}},{content:(g.usd?money(g.usd,g.moneda):'')+(g.bs?'   Bs '+fmt2.format(g.bs):'')+(g.ret?'   A pagar Bs '+fmt2.format(g.net):''),colSpan:5,styles:{halign:'right'}}],
             ['Contrato','Pasajero','Check-in','Check-out','Noches','Status','Observación','Monto','Monto Bs','Retención','A pagar Bs']],
-      body:g.list.map(r=>[r.contrato||'',r.pasajero+(r.nota?'\n'+r.nota:''),fd(r.in),fd(r.out),r.noches??'',r.status||'',r.obs||'',r.rusd?money(r.rusd,r.moneda):'',r.rbs?fmt2.format(r.rbs):'',r.rret?fmt2.format(r.rret):'',r.rnet!=null?fmt2.format(r.rnet):'']),
+      body:g.list.map(r=>[r.contrato||'',r.pasajero+(r.nota?'\n'+r.nota:''),fd(r.in),fd(r.out),r.noches??'',[stLimpio(r.status),isNoShow(r)?'NO SHOW':''].filter(Boolean).join(' · '),r.obs||'',r.rusd?money(r.rusd,r.moneda):'',r.rbs?fmt2.format(r.rbs):'',r.rret?fmt2.format(r.rret):'',r.rnet!=null?fmt2.format(r.rnet):'']),
       styles:{fontSize:8.5,cellPadding:4,lineColor:[219,226,234],lineWidth:.5,textColor:[22,40,58]},
       headStyles:{fillColor:navy,textColor:255,fontStyle:'bold'},
       columnStyles:{1:{cellWidth:160},4:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'},10:{halign:'right'}},
@@ -1429,7 +1435,11 @@ function kGroups(c){const ns=Object.keys(c), par={}; ns.forEach(n=>par[n]=n); co
   const g={}; ns.forEach(n=>(g[f(n)]=g[f(n)]||[]).push(n));
   return Object.values(g).filter(v=>v.length>1).map(v=>v.sort((a,b)=>c[b]-c[a])).sort((a,b)=>b.reduce((s,x)=>s+c[x],0)-a.reduce((s,x)=>s+c[x],0));}
 function kDef(g){const w=g.map(n=>kNorm(n).split(' ')[0]);if(kF()!=='contrato'&&w.every(x=>x===w[0])&&w[0].length>=8)return w[0];return g[0].trim().replace(/\s+/g,' ')}
-function kRender(){
+function kNSRender(){const L=rows.filter(r=>/NO SHOW/i.test(r.status||'')&&r.noshow!==true), box=$('#kNS');box.hidden=kF()!=='status'||!L.length;if(box.hidden)return;
+  box.innerHTML=`<b>NO SHOW en el status</b><span class="hint">${L.length} reservas tienen “NO SHOW” escrito en el status. Pásalas a la casilla <b>No show</b>; su status quedará vacío para que indiques si está pagada o por pagar.</span><div class="row"><button type="button" class="primary" id="kNSgo">Pasar ${L.length} a la casilla No show</button></div>`;
+  $('#kNSgo').onclick=async()=>{const b=$('#kNSgo');if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='Confirmar';return}b.disabled=true;const by={};for(const r of L)(by[r.slug]=by[r.slug]||{})[r.id]={noshow:true,status:/^\s*NO SHOW\s*$/i.test(r.status)?null:r.status.replace(/\s*-?\s*NO SHOW\s*-?\s*/i,' ').trim()||null,editado:new Date().toISOString()};
+    try{for(const [sl,rs] of Object.entries(by))await col().doc(sl).update({rows:rs});toast(`${L.length} reservas marcadas como No show`);setTimeout(kRender,400)}catch(e){toast('No se pudo actualizar. Inténtalo de nuevo.');b.disabled=false}}}
+function kRender(){ kNSRender();
   $('#kTitle').textContent={contrato:'Unificar contratos',status:'Unificar status',obs:'Unificar observaciones'}[kF()];
   const c=kCounts(), G=kGroups(c);
   $('#kSug').innerHTML=G.length?G.map((g,i)=>`<div class="kgrp" data-g="${i}">${g.map(n=>`<label class="check"><input type="checkbox" value="${esc(n)}" checked> ${esc(n)} <span class="kn">${c[n]} reservas</span></label>`).join('')}
