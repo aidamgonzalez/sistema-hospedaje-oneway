@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="es">
+<head>
+<title>Cuadro General de Hospedaje</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2310507a'/%3E%3Ctext x='16' y='22' font-family='Arial' font-weight='700' font-size='15' fill='%23c9995f' text-anchor='middle'%3EOW%3C/text%3E%3C/svg%3E">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth-shim.js"></script>
+<style>
+[hidden]{display:none!important}
+html,body{margin:0}
+.ubox{display:flex;align-items:center;gap:8px}
+.uname{font-size:12px;color:var(--muted);font-weight:600}
+#loginBox{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+#loginBox .card{width:min(380px,100%);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 24px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
+#loginBox h1{margin:0;font-family:var(--display);font-size:22px}
+#loginBox h1 .a{color:var(--sand)} #loginBox h1 .b{color:var(--navy)}
+#loginBox p{margin:0;color:var(--muted);font-size:13px}
+#loginBox form{display:flex;flex-direction:column;gap:12px}
+#loginBox input{width:100%}
+#loginMsg{color:var(--bad);font-size:13px;min-height:1em}
+#usSheet table td{white-space:normal}
+#usSheet .addu{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#usSheet .addu input,#usSheet .addu select{width:100%}
+#usNote{font-size:13px;color:var(--navy);min-height:1em}
+</style>
+</head>
+<body>
+<div id="loginBox">
+  <div class="card">
+    <h1><span class="a">ONE</span><span class="b">WAY</span> · Hospedaje</h1>
+    <p>Entra con el correo y la contraseña que te dio el administrador.</p>
+    <form id="lForm" autocomplete="on">
+      <div class="f"><label for="lEmail">Correo</label><input id="lEmail" type="email" autocomplete="username" required></div>
+      <div class="f"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+      <button class="primary" id="lBtn" type="submit">Entrar</button>
+      <button class="ghost" id="lForgot" type="button">Olvidé mi contraseña</button>
+    </form>
+    <div id="loginMsg" role="alert"></div>
+  </div>
+</div>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* Layout: sticky brand bar + filter strip, one dense ledger table, side sheet for the form */
+:root{
+  --bg:#f6f8fa; --surface:#ffffff; --surface-2:#eef2f6; --line:#dbe2ea;
+  --fg:#16283a; --muted:#5d6f80; --navy:#10507a; --navy-ink:#ffffff;
+  --sand:#c9995f; --sand-soft:#f5ebdd; --sky:#85cfef; --sky-soft:#e3f3fb;
+  --ok:#1f7a4d; --ok-bg:#e2f3ea; --warn:#9a5b00; --warn-bg:#fdf0d8;
+  --bad:#b3261e; --bad-bg:#fbe4e2; --info:#3f4f8f; --info-bg:#e6e9f7;
+  --display:"Montserrat",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --shadow:0 10px 40px rgba(16,40,60,.18);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1720; --surface:#15212c; --surface-2:#1c2a37; --line:#2a3a49;
+  --fg:#e3ebf2; --muted:#93a5b5; --navy:#5cb3e6; --navy-ink:#08131c;
+  --sand:#d9b07e; --sand-soft:#2e261b; --sky:#85cfef; --sky-soft:#16303d;
+  --ok:#6fd3a0; --ok-bg:#163326; --warn:#f0b75c; --warn-bg:#352812;
+  --bad:#f28b82; --bad-bg:#3a1a18; --info:#a9b6f0; --info-bg:#1f2540;
+  --shadow:0 10px 40px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1720; --surface:#15212c; --surface-2:#1c2a37; --line:#2a3a49;
+  --fg:#e3ebf2; --muted:#93a5b5; --navy:#5cb3e6; --navy-ink:#08131c;
+  --sand:#d9b07e; --sand-soft:#2e261b; --sky:#85cfef; --sky-soft:#16303d;
+  --ok:#6fd3a0; --ok-bg:#163326; --warn:#f0b75c; --warn-bg:#352812;
+  --bad:#f28b82; --bad-bg:#3a1a18; --info:#a9b6f0; --info-bg:#1f2540;
+  --shadow:0 10px 40px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:14px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:12px}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.mark{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:.02em}
+.mark .a{color:var(--sand)} .mark .b{color:var(--navy)}
+.brand h1{font-family:var(--display);font-weight:600;font-size:14px;margin:0;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-wrap:balance}
+.spacer{flex:1}
+.yr{flex-direction:row;align-items:center;gap:8px}
+.yr select{font-family:var(--display);font-weight:700;font-size:15px;color:var(--navy);padding:5px 8px}
+.sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--ok)} .dot.err{background:var(--bad)}
+button,.btn{font:inherit;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:8px 14px;cursor:pointer;white-space:nowrap}
+button:hover{background:var(--surface-2)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--sky);outline-offset:1px}
+button.primary{background:var(--navy);color:var(--navy-ink);border-color:var(--navy)}
+button.primary:hover{filter:brightness(1.08);background:var(--navy)}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button.ghost{border-color:transparent;background:transparent}
+button:disabled{opacity:.5;cursor:not-allowed}
+.tabs{display:flex;gap:4px;padding-bottom:0}
+.tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 12px;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--sand)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;padding-block:12px;align-items:end}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+input,select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+.f.search{flex:1 1 240px}
+.f.search input{width:100%}
+.f select{max-width:220px}
+.check{display:flex;align-items:center;gap:6px;font-size:13px;padding:8px 4px;color:var(--muted)}
+.summary{display:flex;flex-wrap:wrap;gap:24px;padding-block:14px;border-bottom:1px solid var(--line)}
+.kpi{display:flex;flex-direction:column}
+.kpi b{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+main{padding-block:14px 48px}
+.tablebox{overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:auto;scrollbar-color:var(--navy) var(--surface-2)}
+#tblBox{height:max(380px,calc(100dvh - 330px))}
+.tablebox::-webkit-scrollbar{height:14px;width:12px}
+.tablebox::-webkit-scrollbar-track{background:var(--surface-2)}
+.tablebox::-webkit-scrollbar-thumb{background:var(--navy);border-radius:8px;border:3px solid var(--surface-2)}
+.hscroll{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding-bottom:8px;font-size:12px;color:var(--muted)}
+.hscroll button{padding:4px 12px;font-size:14px}
+#tbl td.hotel,#tbl th[data-k="hotel"]{position:sticky;left:0;z-index:1;background:var(--surface);box-shadow:1px 0 0 var(--line)}
+#tbl th[data-k="hotel"]{background:var(--surface-2);z-index:2}
+#tbl tbody tr:hover td.hotel{background:var(--sky-soft)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);position:sticky;top:0;cursor:pointer;user-select:none}
+th.num,td.num{text-align:right}
+th .arr{color:var(--sand)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--sky-soft)}
+td.pax{white-space:normal;min-width:200px;max-width:340px;font-weight:500}
+td.hotel{font-weight:600}
+td .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.chip{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.info{background:var(--info-bg);color:var(--info)}
+.quick{display:flex;flex-wrap:wrap;gap:6px}
+.quick .chip{border:1px solid transparent;cursor:pointer;font-size:12px;padding:5px 10px}
+.quick .chip[aria-pressed="true"]{border-color:currentColor;box-shadow:inset 0 0 0 1px currentColor}
+.qlabel{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.hotelf input{width:220px}
+.edit{font-size:12px;padding:4px 10px}
+.zero td{color:var(--muted)}
+.selbar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--navy);border-radius:10px;padding:10px 14px;margin-top:12px;box-shadow:var(--shadow);z-index:4}
+.selbar b{font-family:var(--display)}
+td.sel,th.sel{width:34px;padding-right:0;cursor:default}
+td.sel input{width:16px;height:16px;cursor:pointer}
+td.gcell{background:var(--sand-soft);border-left:3px solid var(--sand);vertical-align:middle}
+td.gcell .sub{font-size:11px}
+tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
+.gtag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--sand);margin-left:6px;white-space:nowrap}
+.mut{color:var(--muted);font-size:12px}
+.gbox{grid-column:1/-1;background:var(--sand-soft);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.gbox ul{margin:0;padding-left:18px;font-size:13px}
+.gbox .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.gbox button{font-size:12px;padding:5px 10px}
+.rbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.rtabs{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:10px;flex-wrap:wrap}
+.rtabs button{border:none;background:none;padding:7px 12px;color:var(--muted)}
+.rtabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(16,40,60,.15)}
+.rdate{display:flex;gap:6px;align-items:end}
+.rdate input{font-family:var(--display);font-weight:600}
+.rexp{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.rhead{padding-block:16px 4px}
+.rhead h2{font-family:var(--display);font-size:20px;margin:0;text-wrap:balance}
+.rhead p{margin:4px 0 0}
+.rhotel{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.rhotel h3{margin:0;padding:10px 14px;font-family:var(--display);font-size:14px;letter-spacing:.03em;background:var(--surface-2);display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.rhotel h3 .sub{font-family:var(--body);font-weight:400;color:var(--muted);font-size:12px}
+.rhotel h3 .tot{margin-left:auto;font-variant-numeric:tabular-nums}
+.rhotel .tablebox{border:none;border-radius:0}
+.rgrand{margin-top:16px;padding:12px 14px;border-radius:10px;background:var(--navy);color:var(--navy-ink);display:flex;flex-wrap:wrap;gap:20px;font-variant-numeric:tabular-nums}
+.rgrand b{font-family:var(--display)}
+@media (max-width:640px){.rexp{margin-left:0}.tasas{order:5;width:100%}.tin input{width:84px}}
+.cfg{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end;padding-block:14px}
+.cfg input{width:auto}
+#cTbl td.num b{font-family:var(--display)}
+#cTbl tfoot td{font-weight:700;background:var(--surface-2);border-top:2px solid var(--line)}
+.lote{margin-top:14px}
+.lote h3 .tot{margin-left:auto}
+.tasas{display:flex;align-items:center;gap:6px;background:var(--sand-soft);border:1px solid var(--line);border-radius:10px;padding:4px 6px 4px 10px;flex-wrap:wrap}
+.tasas .qlabel{color:var(--fg)}
+.tin{display:flex;align-items:center;gap:4px;font-family:var(--display);font-weight:700;color:var(--navy)}
+.tin input{width:96px;padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:600}
+.tasas.missing{border-color:var(--warn);background:var(--warn-bg)}
+.tasas.missing .qlabel{color:var(--warn)}
+.tasas button{padding:5px 8px;font-size:12px}
+.ratebtn{font-size:12px;padding:3px 8px;margin-left:6px}
+#tTbl tbody tr{cursor:pointer}
+.pctsel{font-size:12px;font-weight:600;padding:4px 8px;border-radius:999px;background:var(--info-bg);color:var(--info);border-color:transparent;cursor:pointer}
+.pctsel.unset{background:var(--warn-bg);color:var(--warn)}
+.pendf{color:var(--warn);font-weight:600}
+.pendchip{cursor:pointer}
+.pendtot{display:flex;flex-wrap:wrap;gap:14px 28px;align-items:flex-end;width:100%;background:var(--warn-bg);border:1px solid var(--warn);border-radius:10px;padding:12px 16px}
+.pendtot .pt-h{display:flex;flex-direction:column;margin-right:8px}
+.pendtot .pt-h b{font-family:var(--display);font-size:15px;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
+.pendtot .pt-h span{font-size:12px;color:var(--muted)}
+.pendtot .kpi.big b{font-size:24px;color:var(--warn)}
+#tblH tfoot td{font-weight:700;background:var(--surface-2);border-top:2px solid var(--line)}
+#tblH td.hotel,#tblH th:first-child{position:sticky;left:0;z-index:1;background:var(--surface);box-shadow:1px 0 0 var(--line)}
+#tblH th:first-child{background:var(--surface-2);z-index:2}
+.flag{color:var(--bad);font-weight:700;margin-left:4px}
+.pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
+.empty{padding:48px 16px;text-align:center;color:var(--muted)}
+.empty h2{font-family:var(--display);color:var(--fg);font-size:18px;margin:0 0 6px}
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(10,20,30,.35);z-index:20}
+.sheet{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--surface);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.sheet header{display:flex;align-items:center;gap:8px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.sheet h2{font-family:var(--display);font-size:17px;margin:0;flex:1}
+.sheet form{flex:1;overflow:auto;padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sheet .full{grid-column:1/-1}
+.sheet .f input,.sheet .f select{width:100%}
+.sheet footer{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.hint{font-size:12px;color:var(--muted)}
+.warnbox{grid-column:1/-1;background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:8px 12px;font-size:13px}
+.sec{grid-column:1/-1;font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sand);border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:30;font-weight:500;max-width:calc(100% - 32px)}
+@media (max-width:640px){
+  .hotelf input{width:100%}
+  .sheet form{grid-template-columns:1fr}
+  .brand h1{display:none}
+  .f select{max-width:none}
+  .filters .f:not(.search){flex:1 1 45%}
+}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+</style>
+
+<header class="top">
+  <div class="wrap bar">
+    <div class="brand"><span class="mark"><span class="a">ONE</span><span class="b">WAY</span></span><h1 id="ttl">Cuadro general de hospedaje</h1></div>
+    <div class="f yr"><label for="fYear">Año</label><select id="fYear"><option value="2026">2026</option></select></div>
+    <div class="tasas" id="tasasBox" title="Tasa BCV del día">
+      <span class="qlabel" id="tLbl">BCV hoy</span>
+      <label class="tin" for="tUsd">$<input id="tUsd" type="number" step="0.0001" min="0" placeholder="0,00"></label>
+      <label class="tin" for="tEur">€<input id="tEur" type="number" step="0.0001" min="0" placeholder="0,00"></label>
+      <button type="button" class="ghost" id="tHist">Historial</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="sync" id="sync"><span class="dot" id="dot"></span><span id="syncTxt">Conectando…</span></span>
+    <button id="exportBtn" type="button">Exportar Excel</button>
+    <button id="newHotelBtn" type="button">+ Agregar hotel</button>
+    <button id="newBtn" class="primary" type="button">+ Nueva reserva</button>
+  </div>
+  <div class="wrap tabs" role="tablist">
+    <button role="tab" id="tab-reservas" aria-selected="true" data-view="reservas">Reservas</button>
+    <button role="tab" id="tab-hoteles" aria-selected="false" data-view="hoteles">Resumen por hotel</button>
+    <button role="tab" id="tab-reportes" aria-selected="false" data-view="reportes">Reportes</button>
+    <button role="tab" id="tab-creditos" aria-selected="false" data-view="creditos">Créditos</button>
+  </div>
+</header>
+
+<div class="wrap filters" id="filters">
+  <div class="f search"><label for="q">Buscar</label><input id="q" type="search" placeholder="Pasajero, contrato, factura u observación"></div>
+  <div class="f hotelf"><label for="fHotel">Hotel</label><input id="fHotel" type="search" list="dlHotelF" placeholder="Escribe para buscar"></div>
+  <div class="f"><label for="fContrato">Contrato</label><select id="fContrato"><option value="">Todos</option></select></div>
+  <div class="f"><label for="fStatus">Status</label><select id="fStatus"><option value="">Todos</option></select></div>
+  <div class="f"><label for="fMes">Mes de entrada</label><select id="fMes"><option value="">Todos</option></select></div>
+  <div class="f"><label for="fTipo">Fechas por</label><select id="fTipo"><option value="in">Check-in</option><option value="out">Check-out</option><option value="stay">Estadía (en el hotel)</option></select></div>
+  <div class="f"><label for="fDesde">Desde</label><input type="date" id="fDesde"></div>
+  <div class="f"><label for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
+  <label class="check pendf"><input type="checkbox" id="fPend"> Solo por pagar</label>
+  <label class="check"><input type="checkbox" id="fCruce"> Solo fechas cruzadas</label>
+  <button class="ghost" id="clearBtn" type="button">Limpiar</button>
+</div>
+
+<div class="wrap summary" id="summary"></div>
+
+<main class="wrap">
+  <section id="view-reservas">
+    <div class="hscroll"><span>Desliza la tabla o usa las flechas</span><button type="button" id="scrL" aria-label="Mover a la izquierda">◀</button><button type="button" id="scrR" aria-label="Mover a la derecha">▶</button></div>
+    <div class="tablebox" id="tblBox"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+    <div class="empty" id="empty" hidden><h2 id="emptyTitle">Cargando las reservas…</h2><p id="emptyTxt">En cuanto lleguen los datos aparecen aquí. Para registrar una, usa “+ Nueva reserva”.</p></div>
+    <div class="pager" id="pager"></div>
+    <div class="selbar" id="selbar" hidden><b id="selN"></b><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
+  </section>
+  <section id="view-reportes" hidden>
+    <div class="rbar">
+      <div class="rtabs" role="tablist" aria-label="Tipo de reporte">
+        <button type="button" data-r="pagos" aria-selected="true">Pagos diarios</button>
+        <button type="button" data-r="llegadas" aria-selected="false">Llegadas del día</button>
+        <button type="button" data-r="salidas" aria-selected="false">Salidas del día</button>
+      </div>
+      <div class="rdate">
+        <button type="button" id="rPrev" aria-label="Día anterior">◀</button>
+        <div class="f"><label for="rDate" id="rDateLbl">Fecha de llegada</label><input type="date" id="rDate"></div>
+        <button type="button" id="rNext" aria-label="Día siguiente">▶</button>
+        <button type="button" id="rToday" class="ghost">Hoy</button>
+      </div>
+      <div class="rexp"><button type="button" id="rPdf" class="primary">Descargar PDF</button><button type="button" id="rXls">Descargar Excel</button></div>
+    </div>
+    <div class="rhead"><h2 id="rTitle"></h2><p id="rSub" class="hint"></p></div>
+    <div class="warnbox" id="rYearWarn" hidden></div>
+    <div id="rBody"></div>
+  </section>
+  <section id="view-creditos" hidden>
+    <div class="rbar">
+      <div class="rtabs" role="tablist" aria-label="Créditos">
+        <button type="button" data-c="estatus" aria-selected="true">Estatus de cuentas por pagar</button>
+        <button type="button" data-c="pagos" aria-selected="false">Pagos a hoteles</button>
+      </div>
+      <div class="rexp"><button type="button" id="cPdf" class="primary">Generar PDF</button><button type="button" id="cXls">Descargar Excel</button></div>
+    </div>
+    <div id="cEstatus">
+      <div class="cfg">
+        <div class="f"><label for="cCorte">Estatus al</label><input type="date" id="cCorte"></div>
+        <div class="f"><label for="cTasa">Tasa BCV del día</label><input type="number" step="0.01" min="0" id="cTasa"></div>
+        <button type="button" id="cTasaAll">Aplicar tasa a todas</button>
+        <span class="spacer"></span>
+        <button type="button" id="cAdd" class="primary">+ Agregar hotel con crédito</button>
+      </div>
+      <div class="summary" id="cSum"></div>
+      <div class="tablebox"><table id="cTbl"><thead></thead><tbody></tbody></table></div>
+      <p class="hint">Haz clic en un hotel para cambiar su monto, tasa o estatus. Si el monto lo llevas en dólares, los bolívares se calculan con la tasa; si lo llevas en bolívares, se calculan los dólares.</p>
+    </div>
+    <div id="cPagos" hidden>
+      <div class="cfg">
+        <div class="f"><label for="pHotelF">Hotel</label><input type="search" id="pHotelF" list="dlCredH" placeholder="Todos"></div>
+        <div class="f"><label for="pDesde">Desde</label><input type="date" id="pDesde"></div>
+        <div class="f"><label for="pHasta">Hasta</label><input type="date" id="pHasta"></div>
+        <label class="check"><input type="checkbox" id="pHist"> Incluir historial sin fecha</label>
+        <span class="spacer"></span>
+        <button type="button" id="pAdd" class="primary">+ Registrar pago</button>
+      </div>
+      <div class="summary" id="pSum"></div>
+      <div id="pBody"></div>
+    </div>
+  </section>
+  <section id="view-hoteles" hidden>
+    <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
+  </section>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="sheet" id="sheet" hidden aria-labelledby="sheetTitle">
+  <header><h2 id="sheetTitle">Nueva reserva</h2><button class="ghost" id="closeBtn" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="form" autocomplete="off">
+    <div class="warnbox" id="cruceBox" hidden></div>
+    <div class="warnbox" id="yearBox" hidden></div>
+    <div class="f full"><label for="eHotel">Hotel</label><input id="eHotel" list="dlHotel" required placeholder="Escribe o elige un hotel"></div>
+    <div class="f"><label for="eContrato">Contrato</label><input id="eContrato" list="dlContrato" placeholder="P1 LAURA, OW, METOR…"></div>
+    <div class="f"><label for="eStatus">Status</label><input id="eStatus" list="dlStatus" value="POR PAGAR"></div>
+    <div class="f full"><span class="qlabel">Marcar status</span><div class="quick" id="quickStatus">
+      <button type="button" class="chip ok" data-s="PAGADO">PAGADO</button>
+      <button type="button" class="chip warn" data-s="POR PAGAR">POR PAGAR</button>
+      <button type="button" class="chip bad" data-s="NO SHOW">NO SHOW</button>
+      <button type="button" class="chip warn" data-s="PENDIENTE">PENDIENTE</button>
+      <button type="button" class="chip ok" data-s="PAGADO CON SF">PAGADO CON SF</button>
+    </div></div>
+    <div class="f full"><label for="ePax">Nombre del pasajero</label><input id="ePax" required placeholder="Varios pasajeros: separa con “ - ”"></div>
+    <div class="f"><label for="eIn">Check-in</label><input id="eIn" type="date" required></div>
+    <div class="f"><label for="eOut">Check-out</label><input id="eOut" type="date" required></div>
+    <div class="f"><label for="eNoches">Noches</label><input id="eNoches" type="number" min="0" step="1"></div>
+    <div class="f"><label for="eObs">Observación</label><input id="eObs" list="dlObs" placeholder="SIN COMIDAS, DESAYUNO…"></div>
+    <div class="sec">Montos</div>
+    <div class="gbox" id="gbox" hidden></div>
+    <div class="f"><label for="eUsd" id="lblUsd">Monto $</label><input id="eUsd" type="number" step="0.01" min="0"></div>
+    <div class="f"><label for="eBcv">Tasa BCV</label><input id="eBcv" type="number" step="0.01" min="0"></div>
+    <div class="f"><label for="eBs">Monto Bs</label><input id="eBs" type="number" step="0.01" min="0"></div>
+    <div class="f"><label for="eTarifa">Tarifa</label><input id="eTarifa" type="number" step="0.01" min="0"></div>
+    <div class="f"><label for="eFactura">Factura</label><input id="eFactura"></div>
+    <div class="f"><label for="ePresu">Presupuesto</label><input id="ePresu"></div>
+    <p class="hint full" id="bcvHint"></p>
+    <p class="hint full" id="retHint"></p>
+    <p class="hint full">Si llenas Monto $ y la tasa BCV, el monto en Bs se calcula solo (y al revés).</p>
+  </form>
+  <footer>
+    <button class="primary" id="saveBtn" type="button">Guardar</button>
+    <button id="cancelBtn" type="button">Cancelar</button>
+    <span class="spacer"></span>
+    <button class="danger" id="delBtn" type="button" hidden>Eliminar</button>
+    <button class="danger" id="delConfirm" type="button" hidden>Sí, eliminar</button>
+  </footer>
+</aside>
+<datalist id="dlHotel"></datalist><datalist id="dlHotelF"></datalist><datalist id="dlEstado"></datalist><datalist id="dlContrato"></datalist><datalist id="dlStatus"></datalist><datalist id="dlObs"></datalist>
+<aside class="sheet" id="hsheet" hidden aria-labelledby="hTitle">
+  <header><h2 id="hTitle">Agregar hotel</h2><button class="ghost" id="hClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="hform" autocomplete="off">
+    <div class="f full"><label for="hNombre">Nombre del hotel</label><input id="hNombre" required placeholder="Ej. LIDOTEL MARACAY"></div>
+    <div class="f"><label for="hEstado">Estado</label><input id="hEstado" list="dlEstado" placeholder="Ej. Aragua"></div>
+    <div class="f"><label for="hCategoria">Categoría</label><select id="hCategoria"><option value="">Sin categoría</option><option>Tres Estrellas</option><option>Cuatro Estrellas</option><option>Cinco Estrellas</option><option>Posada</option></select></div>
+    <div class="f"><label for="hRet">Retención de IVA</label><select id="hRet"><option value="">Sin definir</option><option value="0">Sin retención</option><option value="75">75%</option><option value="100">100%</option></select></div>
+    <div class="f"><label for="hMoneda">Moneda de cobro</label><select id="hMoneda"><option value="USD">Dólares ($)</option><option value="EUR">Euros (€)</option></select></div>
+    <p class="hint full">El hotel queda disponible para todos los años. Al registrar su primera reserva aparece en el cuadro del año.</p>
+  </form>
+  <footer><button class="primary" id="hSave" type="button">Guardar hotel</button><button id="hCancel" type="button">Cancelar</button></footer>
+</aside>
+<aside class="sheet" id="csheet" hidden aria-labelledby="cTitle">
+  <header><h2 id="cTitle">Crédito del hotel</h2><button class="ghost" id="cClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="cform" autocomplete="off">
+    <div class="f full"><label for="cHotel">Hotel</label><input id="cHotel" list="dlHotelF" required></div>
+    <div class="f full"><span class="qlabel">Llevo el monto en</span><div class="quick" id="cBase"><button type="button" class="chip" data-b="usd">Dólares ($)</button><button type="button" class="chip" data-b="bs">Bolívares (Bs)</button></div></div>
+    <div class="f"><label for="cUsd">Monto $</label><input id="cUsd" type="number" step="0.01"></div>
+    <div class="f"><label for="cTasaE">Tasa BCV</label><input id="cTasaE" type="number" step="0.01" min="0"></div>
+    <div class="f"><label for="cBs">Monto Bs</label><input id="cBs" type="number" step="0.01"></div>
+    <div class="f"><label for="cRetP">Retención de IVA</label><select id="cRetP"><option value="">Sin definir</option><option value="0">Sin retención</option><option value="75">75%</option><option value="100">100%</option></select></div>
+    <p class="hint full" id="cRetHint"></p>
+    <div class="f full"><label for="cEst">Estatus / observación</label><input id="cEst" placeholder="Ej. Pendiente por conciliar"></div>
+  </form>
+  <footer><button class="primary" id="cSave" type="button">Guardar</button><button id="cCancel" type="button">Cancelar</button><span class="spacer"></span><button class="danger" id="cDel" type="button" hidden>Quitar de créditos</button><button class="danger" id="cDelOk" type="button" hidden>Sí, quitar</button></footer>
+</aside>
+<aside class="sheet" id="psheet" hidden aria-labelledby="pTitle">
+  <header><h2 id="pTitle">Registrar pago</h2><button class="ghost" id="pClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="pform" autocomplete="off">
+    <div class="f"><label for="pFecha">Fecha</label><input id="pFecha" type="date"></div>
+    <div class="f"><label for="pHotel">Hotel</label><input id="pHotel" list="dlHotelF" required></div>
+    <div class="f"><label for="pUsd">Monto $</label><input id="pUsd" type="number" step="0.01"></div>
+    <div class="f"><label for="pTasa">Tasa BCV</label><input id="pTasa" type="number" step="0.01" min="0"></div>
+    <div class="f"><label for="pBs">Monto Bs</label><input id="pBs" type="number" step="0.01"></div>
+    <div class="f"><label for="pEst">Estatus</label><input id="pEst" list="dlPEst" placeholder="LISTO, PAGADO, CARGADO…"></div>
+    <div class="f"><label for="pRetP">Retención de IVA</label><select id="pRetP"><option value="0">Sin retención</option><option value="75">75%</option><option value="100">100%</option></select></div>
+    <div class="f" id="pRetH"><label for="pRH">Pago al hotel Bs</label><input id="pRH" type="number" step="0.01"></div>
+    <div class="f" id="pRetR"><label for="pRR">Retención Bs</label><input id="pRR" type="number" step="0.01"></div>
+    <p class="hint full" id="pRetHint">Retención = IVA (16%) del monto en Bs × el porcentaje del hotel. Puedes corregirla a mano.</p>
+    <div class="f full"><label for="pObs">Observación</label><input id="pObs"></div>
+    <label class="check full" id="pRestaW"><input type="checkbox" id="pResta" checked> <span id="pRestaTxt">Restar este pago de la deuda del hotel</span></label>
+  </form>
+  <footer><button class="primary" id="pSave" type="button">Guardar pago</button><button id="pCancel" type="button">Cancelar</button><span class="spacer"></span><button class="danger" id="pDel" type="button" hidden>Eliminar</button><button class="danger" id="pDelOk" type="button" hidden>Sí, eliminar</button></footer>
+</aside>
+<datalist id="dlCredH"></datalist><datalist id="dlPEst"><option value="LISTO"><option value="PAGADO"><option value="CARGADO"><option value="PENDIENTE"></datalist>
+<aside class="sheet" id="tsheet" hidden aria-labelledby="tTitle">
+  <header><h2 id="tTitle">Tasas BCV</h2><button class="ghost" id="tClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="tform" autocomplete="off">
+    <div class="f"><label for="tF">Fecha</label><input id="tF" type="date"></div>
+    <div class="f"><label for="tFU">Tasa $</label><input id="tFU" type="number" step="0.0001" min="0"></div>
+    <div class="f"><label for="tFE">Tasa €</label><input id="tFE" type="number" step="0.0001" min="0"></div>
+    <div class="f" style="justify-content:end"><button type="button" class="primary" id="tFSave">Guardar tasa</button></div>
+    <p class="hint full">Elige una fecha para cargar o corregir su tasa. Las reservas usan la tasa del día en que se registran; si un día no tiene tasa, se usa la del último día cargado.</p>
+    <div class="full tablebox"><table id="tTbl"><thead><tr><th>Fecha</th><th class="num">Tasa $</th><th class="num">Tasa €</th></tr></thead><tbody></tbody></table></div>
+  </form>
+</aside>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const PAGE=100;
+let db=null, downloads=null, canWrite=true;
+let hotels={};      // slug -> doc body (this year)
+let catalog={}, catalogExists=false, editingHotel=null; // global hotel list
+let rows=[];        // flattened {id, slug, hotel, ...}
+let year=2026, anios=[2026], unsub=null;
+try{const y=parseInt(localStorage.getItem('hosp-year'));if(y)year=y}catch(e){}
+let sel=new Set(), gsize={}, pendingGroup=null;
+let view='reservas', sort={k:'in',d:-1}, page=0, editing=null, loaded=false;
+const fmt2=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0=new Intl.NumberFormat('es-VE');
+const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fd=s=>s?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';
+const num=v=>typeof v==='number'&&isFinite(v)?v:null;
+function slug(s){return s.normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase()||'hotel'}
+const col=()=>db.collection('hoteles-'+year);
+function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
+function setSync(state,txt){$('#dot').className='dot '+(state||'');$('#syncTxt').textContent=txt}
+function chipClass(s){s=(s||'').toUpperCase();if(s.startsWith('PAGADO'))return'ok';if(s.includes('NO SHOW'))return'bad';if(s.startsWith('POR PAGAR')||s.startsWith('PENDIENTE'))return'warn';if(s.startsWith('COMPLEMENT'))return'info';return''}
+
+/* ---------- retenciones ---------- */
+const IVA=0.16;
+const retOf=(bs,pct)=>bs&&pct?Math.round(bs/(1+IVA)*IVA*pct)/100:0;
+const pctLbl=p=>p==null||p===''?'Sin definir':(+p===0?'Sin retención':p+'%');
+function hotelPct(name){const m=allHotels()[upN(name)];return m?m.retencion??null:null}
+function pctSel(attr,p,warn){if(!canWrite)return pctChip(p);const v=p==null?'':String(p);return `<select class="pctsel${p==null?' unset':''}" ${attr} aria-label="Retención">${[['','Elegir %'],['0','Sin retención'],['75','75%'],['100','100%']].map(([k,l])=>`<option value="${k}" ${k===v?'selected':''}>${k===''&&warn?'Retiene · elegir %':l}</option>`).join('')}</select>`}
+function pctChip(p){return p==null?'<span class="chip warn">Ret. sin definir</span>':(+p===0?'<span class="chip">Sin retención</span>':`<span class="chip info">Ret. ${p}%</span>`)}
+
+/* ---------- hotels catalog ---------- */
+const upN=v=>String(v||'').trim().toUpperCase().replace(/\s+/g,' ');
+function allHotels(){ // merged by name: catalog + this year's docs
+  const m={};
+  for(const [sid,h] of Object.entries(catalog)) if(h&&h.nombre&&!h._borrado) m[upN(h.nombre)]={slug:sid,nombre:h.nombre,estado:h.estado||null,categoria:h.categoria||null,moneda:h.moneda||'USD',retencion:h.retencion??null};
+  for(const [sid,h] of Object.entries(hotels)){const k=upN(h.nombre);m[k]={...(m[k]||{}),slug:sid,nombre:h.nombre,estado:h.estado||m[k]?.estado||null,categoria:h.categoria||m[k]?.categoria||null,moneda:h.moneda||m[k]?.moneda||'USD'}}
+  return m;
+}
+async function writeCatalog(sid,meta){
+  if(catalogExists){ await db.doc('config/hoteles').update({lista:{[sid]:meta}}) }
+  else { await db.doc('config/hoteles').set({lista:{...catalog,[sid]:meta}}); catalogExists=true }
+}
+
+/* ---------- data ---------- */
+function rebuild(){
+  const out=[];
+  for(const [sid,h] of Object.entries(hotels)){
+    const rs=h.rows||{};
+    for(const [id,r] of Object.entries(rs)){ if(!r||r._borrado) continue; out.push({...r,id,slug:sid,hotel:h.nombre,moneda:h.moneda||'USD'}); }
+  }
+  // overlap detection: same passenger string, overlapping stays
+  const by={};
+  for(const r of out){r.cruce=null; const k=(r.pasajero||'').toUpperCase().replace(/\s+/g,' ').trim(); if(!k||!r.in||!r.out) continue; (by[k]=by[k]||[]).push(r)}
+  for(const list of Object.values(by)){ if(list.length<2) continue; list.sort((a,b)=>a.in<b.in?-1:1);
+    for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length&&list[j].in<list[i].out;j++){ list[i].cruce=list[j]; list[j].cruce=list[i]; } }
+  gsize={}; for(const r of out) if(r.grupo) gsize[r.grupo]=(gsize[r.grupo]||0)+1;
+  for(const r of out) if(r.grupo&&gsize[r.grupo]<2) r.grupo=null;
+  const AHr=allHotels(); for(const r of out){const pc=AHr[upN(r.hotel)]?.retencion;r.ret=num(r.bs)!=null&&pc?retOf(r.bs,pc):null}
+  rows=out; for(const k of [...sel]) if(!rows.some(r=>r.slug+'|'+r.id===k)) sel.delete(k); fillFilters(); render();
+}
+function uniq(f){const c={};for(const r of rows){const v=r[f];if(v)c[v]=(c[v]||0)+1}return Object.keys(c).sort((a,b)=>c[b]-c[a])}
+function fillSelect(id,vals,labeler){const el=$(id),cur=el.value;el.innerHTML='<option value="">Todos</option>'+vals.map(v=>`<option value="${esc(v)}">${esc(labeler?labeler(v):v)}</option>`).join('');if(vals.includes(cur))el.value=cur}
+function fillFilters(){
+  const AH=allHotels(), hs=Object.values(AH).map(h=>h.nombre).sort((a,b)=>a.localeCompare(b,'es'));
+  $('#dlHotelF').innerHTML=hs.map(h=>`<option value="${esc(h)}">`).join('');
+  $('#dlEstado').innerHTML=[...new Set(Object.values(AH).map(h=>h.estado).filter(Boolean))].sort().map(h=>`<option value="${esc(h)}">`).join('');
+  fillSelect('#fContrato',uniq('contrato')); fillSelect('#fStatus',uniq('status'));
+  const ms=[...new Set(rows.map(r=>r.in&&r.in.slice(0,7)).filter(Boolean))].sort().reverse();
+  fillSelect('#fMes',ms,m=>MESES[+m.slice(5,7)-1]+' '+m.slice(0,4));
+  $('#dlHotel').innerHTML=hs.map(h=>`<option value="${esc(h)}">`).join('');
+  $('#dlContrato').innerHTML=uniq('contrato').slice(0,80).map(h=>`<option value="${esc(h)}">`).join('');
+  $('#dlStatus').innerHTML=uniq('status').map(h=>`<option value="${esc(h)}">`).join('');
+  $('#dlObs').innerHTML=uniq('obs').slice(0,40).map(h=>`<option value="${esc(h)}">`).join('');
+}
+function filtered(){
+  const fa=$('#fDesde').value, fb=$('#fHasta').value, ft=$('#fTipo').value;
+  const inRange=r=>{ if(!fa&&!fb) return true;
+    if(ft==='stay'){ if(!r.in||!r.out) return false; const last=r.out>r.in?r.out:r.in; return (!fb||r.in<=fb)&&(!fa||last>fa||(r.in===r.out&&r.in>=fa)) }
+    const v=r[ft]; return !!v&&(!fa||v>=fa)&&(!fb||v<=fb) };
+  const q=$('#q').value.trim().toUpperCase(), h=upN($('#fHotel').value), hx=h&&allHotels()[h]?true:false, c=$('#fContrato').value, s=$('#fStatus').value, m=$('#fMes').value, x=$('#fCruce').checked;
+  const pend=$('#fPend').checked;
+  return rows.filter(r=>inRange(r)&&(!pend||(r.status||'').toUpperCase().startsWith('POR PAGAR'))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
+    (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel].some(v=>v&&String(v).toUpperCase().includes(q))));
+}
+
+/* ---------- render ---------- */
+const COLS=[['hotel','Hotel'],['contrato','Contrato'],['pasajero','Pasajero'],['in','Check-in'],['out','Check-out'],['noches','Noches',1],['status','Status'],['obs','Observación'],['usd','Monto $',1],['bcv','BCV',1],['bs','Monto Bs',1],['ret','Retención Bs',1],['factura','Factura']];
+function render(){
+  if(view==='reportes'){renderReport();return}
+  if(view==='creditos'){renderCred();return}
+  const list=filtered();
+  const k=sort.k,d=sort.d;
+  let gk=null;
+  if(k==='in'||k==='out'||k==='hotel'||k==='contrato'){ gk={}; for(const r of list) if(r.grupo){const v=r[k];const c=gk[r.grupo];if(v!=null&&(c==null||(d>0?v<c:v>c)))gk[r.grupo]=v} }
+  const key=r=>gk&&r.grupo&&gk[r.grupo]!=null?gk[r.grupo]:r[k];
+  list.sort((a,b)=>{const x=key(a),y=key(b);let c;if(x==null&&y==null)c=0;else if(x==null)return 1;else if(y==null)return -1;else c=(x<y?-1:x>y?1:0)*d;
+    if(c||!gk)return c; const ga=a.grupo||'~'+a.id, gb=b.grupo||'~'+b.id; if(ga!==gb)return ga<gb?-1:1; return (a.in||'')<(b.in||'')?-1:(a.in||'')>(b.in||'')?1:0});
+  const tN=list.reduce((s,r)=>s+(num(r.noches)||0),0), tU=list.reduce((s,r)=>s+(r.moneda==='USD'?num(r.usd)||0:0),0), tB=list.reduce((s,r)=>s+(num(r.bs)||0),0);
+  const pend=list.filter(r=>(r.status||'').toUpperCase().startsWith('POR PAGAR')).length, cr=list.filter(r=>r.cruce).length;
+  if($('#fPend').checked){
+    const PL=list.filter(r=>(r.status||'').toUpperCase().startsWith('POR PAGAR'));
+    const pu=PL.reduce((s,r)=>s+(r.moneda!=='EUR'?num(r.usd)||0:0),0), pe=PL.reduce((s,r)=>s+(r.moneda==='EUR'?num(r.usd)||0:0),0), pb=PL.reduce((s,r)=>s+(num(r.bs)||0),0), pr=PL.reduce((s,r)=>s+(r.ret||0),0);
+    const sinM=PL.filter(r=>num(r.usd)==null&&num(r.bs)==null&&!r.grupo).length, nh=new Set(PL.map(r=>r.hotel)).size;
+    $('#summary').innerHTML=`<div class="pendtot"><div class="pt-h"><b>Total por pagar</b><span>${fmt0.format(PL.length)} reservas en ${nh} ${nh===1?'hotel':'hoteles'}${sinM?` · ${sinM} sin monto cargado`:''}</span></div>`+
+      [['$ '+fmt2.format(pu),'Pendiente en $'],...(pe?[['€ '+fmt2.format(pe),'Pendiente en €']]:[]),['Bs '+fmt2.format(pb),'Pendiente en Bs'],['Bs '+fmt2.format(pr),'Retenciones'],['Bs '+fmt2.format(pb-pr),'A pagar a hoteles']]
+      .map(([v,l],i,a)=>`<div class="kpi${i===a.length-1?' big':''}"><b>${v}</b><span>${l}</span></div>`).join('')+'</div>';
+  } else
+  $('#summary').innerHTML=[[fmt0.format(list.length),'Reservas'],[fmt0.format(tN),'Noches'],['$ '+fmt2.format(tU),'Monto en $'],['Bs '+fmt2.format(tB),'Monto en Bs'],[fmt0.format(pend),'Por pagar'],[fmt0.format(cr),'Fechas cruzadas']]
+    .map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  if(view==='hoteles') return renderHotels(list);
+  const pages=Math.max(1,Math.ceil(list.length/PAGE)); if(page>=pages) page=pages-1;
+  const slice=list.slice(page*PAGE,page*PAGE+PAGE);
+  $('#tbl thead').innerHTML='<tr>'+(canWrite?'<th class="sel" title="Seleccionar para unir pagos"></th>':'')+COLS.map(([key,l,n])=>`<th class="${n?'num':''}" data-k="${key}">${l}${sort.k===key?` <span class="arr">${sort.d>0?'▲':'▼'}</span>`:''}</th>`).join('')+'</tr>';
+  const html=[];
+  for(let i=0;i<slice.length;i++){
+    const r=slice[i]; let span=1;
+    if(r.grupo) while(i+span<slice.length&&slice[i+span].grupo===r.grupo) span++;
+    const run=slice.slice(i,i+span);
+    for(let j=0;j<run.length;j++){
+      const x=run[j], key=x.slug+'|'+x.id, n=x.grupo?gsize[x.grupo]:0;
+      let money='';
+      if(j===0){
+        if(span>1){
+          const su=run.reduce((s,y)=>s+(num(y.usd)||0),0), sb=run.reduce((s,y)=>s+(num(y.bs)||0),0), bcv=run.map(y=>y.bcv).find(v=>num(v)!=null), fac=[...new Set(run.map(y=>y.factura).filter(Boolean))].join(', ');
+          const cur=x.moneda==='EUR'?'€ ':'';
+          const gr=retOf(sb,hotelPct(x.hotel)); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas</span></td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(sb-gr)}</span>`:''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
+        } else {
+          const empty=num(x.usd)==null&&num(x.bs)==null&&x.grupo;
+          money=`<td class="num">${num(x.usd)!=null?(x.moneda==='EUR'?'€ ':'')+fmt2.format(x.usd):(empty?'<span class="mut">pago compartido</span>':'')}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}</td><td class="num">${(()=>{const rr=retOf(num(x.bs),hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(x.bs-rr)}</span>`:''})()}</td><td>${esc(x.factura)}</td>`;
+        }
+      }
+      html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
+    <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
+    <td class="pax">${esc(x.pasajero)}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.cruce?`<span class="flag" title="Se cruza con ${esc(x.cruce.hotel)} ${fd(x.cruce.in)}–${fd(x.cruce.out)}">⚠</span>`:''}</td>
+    <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
+    <td>${x.status?`<span class="chip ${chipClass(x.status)}">${esc(x.status)}</span>`:''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
+    }
+    i+=span-1;
+  }
+  $('#tbl tbody').innerHTML=html.join('');
+  updSel();
+  const em=$('#empty'); em.hidden=list.length>0;
+  if(!list.length){ if(!loaded){$('#emptyTitle').textContent='Cargando las reservas…';$('#emptyTxt').textContent='En cuanto lleguen los datos aparecen aquí.'}
+    else if(rows.length){$('#emptyTitle').textContent='Ninguna reserva coincide';$('#emptyTxt').textContent='Prueba con otra búsqueda o pulsa “Limpiar”.'}
+    else{$('#emptyTitle').textContent='Todavía no hay reservas';$('#emptyTxt').textContent='Registra la primera con “+ Nueva reserva”.'} }
+  $('#pager').innerHTML=list.length?`<span>Mostrando ${fmt0.format(page*PAGE+1)}–${fmt0.format(page*PAGE+slice.length)} de ${fmt0.format(list.length)}</span>
+    <span style="display:flex;gap:8px"><button type="button" id="prev" ${page?'':'disabled'}>← Anterior</button><button type="button" id="next" ${page<pages-1?'':'disabled'}>Siguiente →</button></span>`:'';
+  $('#prev')&&($('#prev').onclick=()=>{page--;render();$('#tblBox').scrollTop=0}); $('#next')&&($('#next').onclick=()=>{page++;render();$('#tblBox').scrollTop=0});
+}
+function renderHotels(list){
+  const g={};
+  for(const r of list){const k=upN(r.hotel);const h=g[k]=g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0};h.n++;h.noches+=num(r.noches)||0;h.usd+=num(r.usd)||0;h.bs+=num(r.bs)||0;if((r.status||'').toUpperCase().startsWith('POR PAGAR')){h.pend++;h.pu+=num(r.usd)||0;h.pb+=num(r.bs)||0;h.pr+=r.ret||0}}
+  const hf=upN($('#fHotel').value), others=$('#fPend').checked||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
+  const AH=allHotels();
+  const arr=Object.entries(AH).filter(([k])=>(!hf||k.includes(hf))&&(!others||g[k])).map(([k,m])=>[m,g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0}])
+    .sort($('#fPend').checked?((a,b)=>b[1].pb-a[1].pb||b[1].pu-a[1].pu||b[1].pend-a[1].pend):((a,b)=>b[1].n-a[1].n||a[0].nombre.localeCompare(b[0].nombre,'es')));
+  $('#tblH thead').innerHTML='<tr><th>Hotel</th><th>Estado</th><th>Categoría</th><th>Retención</th><th class="num">Reservas</th><th class="num">Noches</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th><th class="num">Por pagar</th><th class="num">Pendiente $ / €</th><th class="num">Pendiente Bs</th><th class="num">A pagar Bs</th><th></th></tr>';
+  $('#tblH tbody').innerHTML=arr.length?arr.map(([m,h])=>`<tr data-hotel="${esc(m.nombre)}" class="${h.n?'':'zero'}"><td class="hotel">${esc(m.nombre)}</td><td>${esc(m.estado||'')}</td><td>${esc(m.categoria||'')}</td><td>${pctSel(`data-hret="${esc(m.nombre)}"`,m.retencion)}</td>
+    <td class="num">${fmt0.format(h.n)}</td><td class="num">${fmt0.format(h.noches)}</td><td class="num">${m.moneda==='EUR'?'€ ':''}${fmt2.format(h.usd)}</td><td class="num">${fmt2.format(h.bs)}</td>
+    <td class="num">${h.pend?`<span class="chip warn pendchip" data-pend="${esc(m.nombre)}" title="Ver reservas por pagar">${h.pend}</span>`:'—'}</td><td class="num">${h.pu?(m.moneda==='EUR'?'€ ':'')+fmt2.format(h.pu):''}</td><td class="num">${h.pb?fmt2.format(h.pb):''}</td><td class="num">${h.pb?'<b>'+fmt2.format(h.pb-h.pr)+'</b>':''}</td><td>${canWrite?`<button type="button" class="edit" data-edit="${esc(m.nombre)}">Editar</button>`:''}</td></tr>`).join('')
+    :`<tr><td colspan="13" class="empty">Ningún hotel coincide con “${esc($('#fHotel').value)}”. Puedes crearlo con “+ Agregar hotel”.</td></tr>`;
+  let tf=$('#tblH tfoot'); if(!tf){tf=document.createElement('tfoot');$('#tblH').appendChild(tf)}
+  const T=arr.reduce((t,[,h])=>{t.n+=h.n;t.no+=h.noches;t.bs+=h.bs;t.pend+=h.pend;t.pb+=h.pb;t.pr+=h.pr;return t},{n:0,no:0,bs:0,pend:0,pb:0,pr:0});
+  const TU=arr.reduce((t,[m,h])=>{t[m.moneda==='EUR'?'e':'u']+=h.usd;t[m.moneda==='EUR'?'pe':'pu']+=h.pu;return t},{u:0,e:0,pu:0,pe:0});
+  tf.innerHTML=arr.length?`<tr><td>TOTAL (${arr.length} hoteles)</td><td></td><td></td><td></td><td class="num">${fmt0.format(T.n)}</td><td class="num">${fmt0.format(T.no)}</td><td class="num">${fmt2.format(TU.u)}${TU.e?`<span class="sub">€ ${fmt2.format(TU.e)}</span>`:''}</td><td class="num">${fmt2.format(T.bs)}</td><td class="num">${fmt0.format(T.pend)}</td><td class="num">${fmt2.format(TU.pu)}${TU.pe?`<span class="sub">€ ${fmt2.format(TU.pe)}</span>`:''}</td><td class="num">${fmt2.format(T.pb)}</td><td class="num">${fmt2.format(T.pb-T.pr)}</td><td></td></tr>`:'';
+}
+
+/* ---------- shared payments ---------- */
+function updSel(){ const n=sel.size; $('#selbar').hidden=!n||view!=='reservas'; $('#selN').textContent=n===1?'1 reserva seleccionada':n+' reservas seleccionadas';
+  const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean);
+  $('#grpBtn').disabled=n<2; $('#ungrpBtn').disabled=!rs.some(r=>r.grupo); }
+async function setGroup(targets,gid){ // targets: [{slug,id}]
+  const by={}; for(const t of targets)(by[t.slug]=by[t.slug]||{})[t.id]={grupo:gid};
+  for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs});
+}
+async function groupSelected(){
+  const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean); if(rs.length<2) return;
+  const gid=rs.find(r=>r.grupo)?.grupo||('g'+Date.now().toString(36));
+  try{ await setGroup(rs,gid); sel.clear(); toast(`Listo: ${rs.length} reservas comparten un solo pago. Coloca el monto en una de ellas.`) }catch(e){ toast('No se pudo unir el pago. Inténtalo de nuevo.') }
+}
+async function ungroupSelected(){
+  const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(r=>r&&r.grupo);
+  try{ await setGroup(rs,null); sel.clear(); toast('Reservas separadas del pago compartido.') }catch(e){ toast('No se pudo separar. Inténtalo de nuevo.') }
+}
+function renderGbox(){
+  const box=$('#gbox'), g=editing?.grupo||pendingGroup?.gid;
+  const mem=g?rows.filter(r=>r.grupo===g):[];
+  if(!editing&&!pendingGroup){box.hidden=true;return}
+  box.hidden=false;
+  if(pendingGroup){ const base=pendingGroup.anchor; box.innerHTML=`<b>Pago compartido</b><span class="hint">Esta reserva se une al pago de ${esc(base.pasajero)}${mem.length?' y '+(mem.length-1)+' más':''}. Si el monto ya está en esa reserva, deja los montos vacíos aquí.</span>`; return }
+  if(!mem.length){ box.innerHTML=`<div class="row"><span class="hint">¿Este monto cubre otras reservas?</span><button type="button" id="gAdd">+ Añadir otra reserva a este pago</button></div>`; }
+  else{
+    const su=mem.reduce((s,y)=>s+(num(y.usd)||0),0), sb=mem.reduce((s,y)=>s+(num(y.bs)||0),0), cur=mem[0].moneda==='EUR'?'€ ':'$ ';
+    box.innerHTML=`<b>Pago compartido · ${mem.length} reservas</b><span class="hint">Total del pago: ${cur}${fmt2.format(su)} · Bs ${fmt2.format(sb)}</span>
+      <ul>${mem.sort((a,b)=>(a.in||'')<(b.in||'')?-1:1).map(m=>`<li>${esc(m.pasajero)} · ${fd(m.in)}–${fd(m.out)}${m.id===editing.id?' <b>(esta)</b>':''}</li>`).join('')}</ul>
+      <div class="row"><button type="button" id="gAdd">+ Añadir otra reserva a este pago</button><button type="button" id="gOut">Quitar esta reserva del pago</button></div>`;
+  }
+  $('#gAdd')&&($('#gAdd').onclick=()=>{ const a=editing; pendingGroup={gid:a.grupo||('g'+Date.now().toString(36)),anchor:a}; const keep={hotel:a.hotel,contrato:a.contrato,status:a.status,obs:a.obs,in:a.in,out:a.out,noches:a.noches,bcv:a.bcv}; openSheet(null,keep) });
+  $('#gOut')&&($('#gOut').onclick=async()=>{ try{ await setGroup([editing],null); editing={...editing,grupo:null}; toast('Reserva quitada del pago compartido.'); renderGbox() }catch(e){ toast('No se pudo quitar del pago.') } });
+}
+
+/* ---------- hotel form ---------- */
+function openHotel(name){
+  const m=name?allHotels()[upN(name)]:null; editingHotel=m;
+  $('#hTitle').textContent=m?'Editar hotel':'Agregar hotel';
+  $('#hNombre').value=m?m.nombre:upN($('#fHotel').value); $('#hEstado').value=m?.estado||''; $('#hCategoria').value=m?.categoria||''; $('#hMoneda').value=m?.moneda||'USD'; $('#hRet').value=m?.retencion!=null?String(m.retencion):'';
+  if($('#hCategoria').value!==(m?.categoria||'')&&m?.categoria){const o=document.createElement('option');o.textContent=m.categoria;$('#hCategoria').appendChild(o);$('#hCategoria').value=m.categoria}
+  $('#hSave').disabled=!canWrite; $('#scrim').hidden=false; $('#hsheet').hidden=false; setTimeout(()=>$('#hNombre').focus(),50);
+}
+function closeHotel(){ $('#hsheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true; editingHotel=null }
+async function saveHotel(){
+  if(!db){toast('Sin conexión con la base de datos: no se pudo guardar.');return}
+  const nombre=upN($('#hNombre').value); if(!nombre){$('#hNombre').focus();toast('Escribe el nombre del hotel.');return}
+  const AH=allHotels(), dup=AH[nombre];
+  if(dup&&(!editingHotel||dup.slug!==editingHotel.slug)){toast('Ese hotel ya existe.');return}
+  const est=$('#hEstado').value.trim(), meta={nombre,estado:est?est.charAt(0).toUpperCase()+est.slice(1).toLowerCase():null,categoria:$('#hCategoria').value||null,moneda:$('#hMoneda').value,retencion:$('#hRet').value===''?null:+$('#hRet').value};
+  let sid=editingHotel?editingHotel.slug:slug(nombre); if(!editingHotel) while(catalog[sid]||hotels[sid]) sid+='-2';
+  $('#hSave').disabled=true;
+  try{
+    await writeCatalog(sid,meta);
+    if(hotels[sid]) await col().doc(sid).update(meta);
+    toast(editingHotel?'Hotel actualizado':'Hotel agregado: '+nombre); closeHotel(); fillFilters(); render();
+  }catch(e){ toast('No se pudo guardar el hotel. Inténtalo de nuevo.') }
+  finally{ $('#hSave').disabled=!canWrite }
+}
+
+/* ---------- form ---------- */
+const F=['eHotel','eContrato','eStatus','ePax','eIn','eOut','eNoches','eObs','eUsd','eBcv','eBs','eTarifa','eFactura','ePresu'].reduce((o,k)=>(o[k]=document.getElementById(k),o),{});
+function openSheet(r,pre){
+  editing=r||null; if(r||!pre) pendingGroup=null; $('#sheetTitle').textContent=r?'Editar reserva':(pendingGroup?'Nueva reserva en el mismo pago':'Nueva reserva');
+  F.eHotel.value=r?r.hotel:(allHotels()[upN($('#fHotel').value)]?.nombre||''); F.eContrato.value=r?.contrato||$('#fContrato').value||''; F.eStatus.value=r?(r.status||''):'POR PAGAR';
+  F.ePax.value=r?.pasajero||''; F.eIn.value=r?.in||''; F.eOut.value=r?.out||''; F.eNoches.value=r?.noches??'';
+  if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
+  F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||'';
+  $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
+  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; checkCruce(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
+  $('#scrim').hidden=false; $('#sheet').hidden=false; setTimeout(()=>(r||pre?F.ePax:F.eHotel).focus(),50);
+}
+function closeSheet(){ $('#scrim').hidden=true; $('#sheet').hidden=true; editing=null; pendingGroup=null }
+function syncQuick(){const v=F.eStatus.value.trim().toUpperCase();document.querySelectorAll('#quickStatus .chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.s===v)))}
+$('#quickStatus').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;F.eStatus.value=b.dataset.s;syncQuick()});
+F.eStatus.addEventListener('input',syncQuick);
+function nights(){ if(F.eIn.value&&F.eOut.value){const n=Math.round((new Date(F.eOut.value)-new Date(F.eIn.value))/864e5); if(n>=0) F.eNoches.value=n} }
+function checkCruce(){
+  const p=F.ePax.value.toUpperCase().replace(/\s+/g,' ').trim(), a=F.eIn.value, b=F.eOut.value, box=$('#cruceBox');
+  const hit=p&&a&&b?rows.find(r=>(!editing||r.id!==editing.id)&&(r.pasajero||'').toUpperCase().replace(/\s+/g,' ').trim()===p&&r.in<b&&a<r.out):null;
+  const yb=$('#yearBox'), iy=a?+a.slice(0,4):year; yb.hidden=iy===year; if(iy!==year) yb.textContent=`El check-in es de ${iy}, pero estás guardando en el año ${year}. Si corresponde a ${iy}, cambia de año arriba antes de guardar.`;
+  box.hidden=!hit; if(hit) box.textContent=`Ojo: este pasajero ya tiene una reserva que se cruza en ${hit.hotel}, del ${fd(hit.in)} al ${fd(hit.out)}.`;
+}
+F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce);
+function calcBs(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value);if(u>0&&t>0)F.eBs.value=(u*t).toFixed(2)}
+F.eUsd.addEventListener('input',calcBs); F.eBcv.addEventListener('input',()=>{const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(u>0)calcBs();else if(b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)});
+F.eBs.addEventListener('input',()=>{const t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(!(parseFloat(F.eUsd.value)>0)&&b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)});
+
+function collect(){
+  const up=v=>v.trim().toUpperCase().replace(/\s+/g,' ');
+  const r={contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
+  for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
+  for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
+  return r;
+}
+async function save(){
+  if(!db){toast('Sin conexión con la base de datos: no se pudo guardar.');return}
+  const hn=F.eHotel.value.trim().toUpperCase().replace(/\s+/g,' ');
+  if(!hn){F.eHotel.focus();toast('Indica el hotel.');return}
+  if(!F.ePax.value.trim()){F.ePax.focus();toast('Indica el nombre del pasajero.');return}
+  if(!F.eIn.value||!F.eOut.value){toast('Indica las fechas de check-in y check-out.');return}
+  if(F.eOut.value<F.eIn.value){toast('El check-out no puede ser antes del check-in.');return}
+  const rec=collect(); rec.editado=new Date().toISOString(); rec.grupo=pendingGroup?pendingGroup.gid:(editing?.grupo||null); const pg=pendingGroup;
+  let sid=Object.keys(hotels).find(k=>hotels[k].nombre.toUpperCase()===hn);
+  const btn=$('#saveBtn'); btn.disabled=true;
+  try{
+    const id=editing&&editing.slug===sid?editing.id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    if(!sid){ const cm=allHotels()[hn];
+      sid=cm?cm.slug:slug(hn); while(hotels[sid]) sid+='-2';
+      const meta={nombre:cm?cm.nombre:hn,estado:cm?.estado||null,categoria:cm?.categoria||null,moneda:cm?.moneda||'USD'};
+      await col().doc(sid).set({...meta,orden:Object.keys(hotels).length,rows:{[id]:rec}});
+      if(!cm){ try{await writeCatalog(sid,meta)}catch(e){} }
+    } else { await col().doc(sid).update({rows:{[id]:rec}}) }
+    if(editing&&editing.slug!==sid){ await col().doc(editing.slug).update({rows:{[editing.id]:{_borrado:true}}}) }
+    if(pg&&!pg.anchor.grupo){ try{ await setGroup([pg.anchor],pg.gid) }catch(e){} }
+    toast(pg?'Reserva añadida al pago compartido':(editing?'Reserva actualizada':'Reserva guardada')); closeSheet();
+  }catch(e){ toast(e&&e.code==='quota_exceeded'?'La base de datos está llena; exporta y archiva registros antiguos.':(e&&e.code==='invalid_argument'?'No tienes permiso para guardar cambios aquí.':'No se pudo guardar. Inténtalo de nuevo.')) }
+  finally{ btn.disabled=!canWrite }
+}
+async function del(){
+  if(!editing||!db) return;
+  try{ await col().doc(editing.slug).update({rows:{[editing.id]:{_borrado:true,editado:new Date().toISOString()}}}); toast('Reserva eliminada'); closeSheet() }
+  catch(e){ toast('No se pudo eliminar. Inténtalo de nuevo.') }
+}
+
+/* ---------- export ---------- */
+async function exportXlsx(){
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel.');return}
+  const wb=XLSX.utils.book_new();
+  const hs=Object.entries(hotels).sort((a,b)=>(a[1].orden??999)-(b[1].orden??999));
+  const head=['CONTRATO','NOMBRE DEL PASAJERO','IN','OUT','STATUS','OBSERVACION','MONTO','MONTO BS','BCV','FACTURA','NOCHES','TARIFA','PRESUPUESTO'];
+  const used=new Set();
+  const all=[['HOTEL',...head]];
+  for(const [sid,h] of hs){
+    const rs0=rows.filter(r=>r.slug===sid); if(!rs0.length) continue;
+    const gmin={}; for(const r of rs0) if(r.grupo&&(gmin[r.grupo]==null||(r.in||'')<gmin[r.grupo])) gmin[r.grupo]=r.in||'';
+    const kk=r=>(r.grupo?gmin[r.grupo]:(r.in||''))+'|'+(r.grupo||'~'+r.id)+'|'+(r.in||'');
+    const rs=rs0.sort((a,b)=>kk(a)<kk(b)?-1:kk(a)>kk(b)?1:0);
+    const toRow=r=>[r.contrato,r.pasajero,r.in?new Date(r.in+'T12:00:00'):null,r.out?new Date(r.out+'T12:00:00'):null,r.status,r.obs,r.usd,r.bs,r.bcv,r.factura,r.noches,r.tarifa,r.presupuesto];
+    const hd=[...head]; hd[6]=h.moneda==='EUR'?'MONTO €':'MONTO $';
+    const data=rs.map(toRow), merges=[];
+    for(let i=0;i<rs.length;){ let j=i+1; if(rs[i].grupo) while(j<rs.length&&rs[j].grupo===rs[i].grupo) j++;
+      if(j-i>1){ const run=rs.slice(i,j), su=run.reduce((s,y)=>s+(num(y.usd)||0),0), sb=run.reduce((s,y)=>s+(num(y.bs)||0),0);
+        data[i][6]=su||null; data[i][7]=sb||null; data[i][8]=run.map(y=>y.bcv).find(v=>num(v)!=null)??null; data[i][9]=[...new Set(run.map(y=>y.factura).filter(Boolean))].join(', ')||null; data[i][12]=run.map(y=>y.presupuesto).find(Boolean)||null;
+        for(let k=i+1;k<j;k++) for(const c of [6,7,8,9,12]) data[k][c]=null;
+        for(const c of [6,7,8,9,12]) merges.push({s:{r:i+1,c},e:{r:j,c}}); }
+      i=j; }
+    const ws=XLSX.utils.aoa_to_sheet([hd,...data],{cellDates:true,dateNF:'dd/mm/yyyy'}); ws['!merges']=merges;
+    ws['!cols']=[{wch:14},{wch:40},{wch:11},{wch:11},{wch:12},{wch:20},{wch:11},{wch:14},{wch:9},{wch:9},{wch:7},{wch:9},{wch:12}];
+    let name=h.nombre.replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31).trim()||'HOTEL'; while(used.has(name)) name=name.slice(0,28)+'_'+used.size; used.add(name);
+    XLSX.utils.book_append_sheet(wb,ws,name);
+    rs.forEach(r=>all.push([h.nombre,...toRow(r)]));
+  }
+  const allWs=XLSX.utils.aoa_to_sheet(all,{cellDates:true,dateNF:'dd/mm/yyyy'});
+  XLSX.utils.book_append_sheet(wb,allWs,'TODAS'); wb.SheetNames.unshift(wb.SheetNames.pop());
+  const buf=XLSX.write(wb,{bookType:'xlsx',type:'array',cellDates:true});
+  const d=new Date(), stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  if(!downloads){toast('Descargar no está disponible en esta vista.');return}
+  try{ await downloads.save({filename:`CUADRO GENERAL ${year} HOSPEDAJE (${stamp}).xlsx`,data:buf}); }
+  catch(e){ if(e&&e.code!=='declined') toast('No se pudo descargar el archivo.') }
+}
+
+/* ---------- events ---------- */
+['#fDesde','#fHasta','#fTipo'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
+['#q','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'?'input':'change',()=>{page=0;render()}));
+$('#clearBtn').onclick=()=>{$('#q').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;page=0;render()};
+$('#tbl thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th)return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};render()});
+$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k);updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
+$('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+function setView(v){view=v;page=0;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));$('#view-reservas').hidden=v!=='reservas';$('#view-hoteles').hidden=v!=='hoteles';$('#view-reportes').hidden=v!=='reportes';$('#view-creditos').hidden=v!=='creditos';$('#filters').hidden=v==='reportes'||v==='creditos';$('#summary').hidden=v==='reportes'||v==='creditos';render();updSel()}
+$('#newBtn').onclick=()=>openSheet(null);
+$('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();render()};
+$('#newHotelBtn').onclick=()=>openHotel(null);
+$('#hClose').onclick=closeHotel; $('#hCancel').onclick=closeHotel; $('#hSave').onclick=saveHotel; $('#hform').addEventListener('submit',e=>{e.preventDefault();saveHotel()});
+$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT()};
+$('#saveBtn').onclick=save; $('#form').addEventListener('submit',e=>{e.preventDefault();save()});
+$('#delBtn').onclick=()=>{$('#delBtn').hidden=true;$('#delConfirm').hidden=false}; $('#delConfirm').onclick=del;
+$('#exportBtn').onclick=exportXlsx;
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#tsheet').hidden){closeT();return}if(!$('#csheet').hidden)closeC();else if(!$('#psheet').hidden)closeP();else if(!$('#hsheet').hidden)closeHotel();else if(!$('#sheet').hidden)closeSheet()});
+
+/* ---------- years ---------- */
+function fillYears(){
+  const nx=anios[anios.length-1]+1;
+  $('#fYear').innerHTML=anios.map(y=>`<option value="${y}">${y}</option>`).join('')+(canWrite?`<option value="new">+ Abrir ${nx}</option>`:'');
+  $('#fYear').value=String(year); $('#ttl').textContent='Cuadro general de hospedaje '+year;
+}
+function openYear(y){
+  year=y; try{localStorage.setItem('hosp-year',String(y))}catch(e){}
+  fillYears(); if(unsub){unsub();unsub=null}
+  hotels={}; rows=[]; loaded=false; page=0; fillFilters(); render();
+  if(!db) return;
+  const sub=()=>{unsub=col().limit(1000).onSnapshot(snap=>{
+    const h={}; snap.docs.forEach(d=>{if(d.exists)h[d.id]=d.data()}); hotels=h; loaded=true;
+    setSync(snap.metadata.fromCache?'':'on',snap.metadata.hasPendingWrites?'Guardando…':'Sincronizado'); rebuild();
+  },err=>{ setSync('err','Desconectado'); if(err&&err.code==='unavailable') setTimeout(sub,3000) })};
+  sub();
+}
+$('#fYear').addEventListener('change',async e=>{
+  const v=e.target.value;
+  if(v==='new'){
+    const nx=anios[anios.length-1]+1;
+    try{ await db.doc('config/general').set({anios:[...anios,nx]}); anios=[...anios,nx]; toast('Año '+nx+' abierto. Ya puedes registrar sus reservas.'); openYear(nx) }
+    catch(err){ toast('No se pudo abrir el año nuevo.'); fillYears() }
+  } else { ['#fHotel','#fContrato','#fStatus','#fMes'].forEach(s=>$(s).value=''); openYear(+v) }
+});
+
+/* ---------- reports ---------- */
+let rType='pagos';
+const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+$('#rDate').value=todayStr();
+const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function longDate(s){const d=new Date(s+'T12:00:00');return DIAS[d.getDay()]+' '+(+s.slice(8,10))+' de '+MESES[+s.slice(5,7)-1].toLowerCase()+' de '+s.slice(0,4)}
+const RT={pagos:{t:'Pagos diarios',lbl:'Fecha de llegada',sub:'Reservas POR PAGAR con llegada el'},llegadas:{t:'Llegadas del día',lbl:'Fecha de check-in',sub:'Huéspedes con check-in el'},salidas:{t:'Salidas del día',lbl:'Fecha de check-out',sub:'Huéspedes con check-out el'}};
+function reportData(){
+  const d=$('#rDate').value; if(!d) return {d,groups:[],n:0};
+  let rs=rows.filter(r=>rType==='salidas'?r.out===d:r.in===d);
+  if(rType==='pagos') rs=rs.filter(r=>(r.status||'').toUpperCase().startsWith('POR PAGAR'));
+  // shared payments: show group total once
+  const seen=new Set();
+  const items=rs.map(r=>{let usd=num(r.usd),bs=num(r.bs),nota='';
+    if(r.grupo){const mem=rows.filter(x=>x.grupo===r.grupo);
+      if(seen.has(r.grupo)){usd=null;bs=null;nota='Incluido en el pago compartido'}
+      else{seen.add(r.grupo);usd=mem.reduce((s,x)=>s+(num(x.usd)||0),0)||null;bs=mem.reduce((s,x)=>s+(num(x.bs)||0),0)||null;nota='Pago compartido de '+mem.length+' reservas'}}
+    const pc=hotelPct(r.hotel), rr=retOf(bs,pc); return {...r,rusd:usd,rbs:bs,nota,pct:pc,rret:rr||null,rnet:bs?bs-rr:null}});
+  const by={}; for(const r of items)(by[r.hotel]=by[r.hotel]||[]).push(r);
+  const groups=Object.entries(by).sort((a,b)=>a[0].localeCompare(b[0],'es')).map(([h,list])=>{
+    list.sort((a,b)=>(a.grupo||'~'+a.pasajero)<(b.grupo||'~'+b.pasajero)?-1:1);
+    const meta=allHotels()[upN(h)]||{};
+    return {hotel:h,estado:meta.estado||'',moneda:list[0].moneda,pct:meta.retencion??null,list,usd:list.reduce((s,x)=>s+(x.rusd||0),0),bs:list.reduce((s,x)=>s+(x.rbs||0),0),ret:list.reduce((s,x)=>s+(x.rret||0),0),net:list.reduce((s,x)=>s+(x.rnet||0),0)}});
+  return {d,groups,n:items.length};
+}
+function money(v,m){return v?(m==='EUR'?'€ ':'$ ')+fmt2.format(v):''}
+function renderReport(){
+  const cfg=RT[rType], {d,groups,n}=reportData();
+  $('#rDateLbl').textContent=cfg.lbl;
+  document.querySelectorAll('.rtabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.r===rType)));
+  $('#rTitle').textContent=cfg.t+(d?' · '+fd(d):'');
+  $('#rSub').textContent=d?`${cfg.sub} ${longDate(d)} · ${n} ${n===1?'reserva':'reservas'} en ${groups.length} ${groups.length===1?'hotel':'hoteles'}`:'Elige una fecha.';
+  const yw=$('#rYearWarn'), dy=d?+d.slice(0,4):year; yw.hidden=dy===year;
+  if(dy!==year) yw.textContent=`La fecha es de ${dy} y estás viendo el año ${year}. Cambia el año arriba para ver las reservas guardadas en ${dy}.`;
+  const showMoney=true;
+  if(!loaded){$('#rBody').innerHTML='<div class="empty"><h2>Cargando las reservas…</h2></div>';return}
+  if(!groups.length){$('#rBody').innerHTML=`<div class="empty"><h2>No hay ${rType==='pagos'?'pagos pendientes':rType==='llegadas'?'llegadas':'salidas'} para esta fecha</h2><p>Prueba con otro día usando las flechas o el calendario.</p></div>`;return}
+  const tu=groups.reduce((s,g)=>s+(g.moneda==='USD'?g.usd:0),0), te=groups.reduce((s,g)=>s+(g.moneda==='EUR'?g.usd:0),0), tb=groups.reduce((s,g)=>s+g.bs,0), tr=groups.reduce((s,g)=>s+g.ret,0);
+  $('#rBody').innerHTML=groups.map(g=>`<div class="rhotel"><h3>${esc(g.hotel)}<span class="sub">${esc(g.estado)} · ${g.list.length} ${g.list.length===1?'reserva':'reservas'}</span>${pctChip(g.pct)}${showMoney&&(g.usd||g.bs)?`<span class="tot">${money(g.usd,g.moneda)}${g.bs?' · Bs '+fmt2.format(g.bs):''}${g.ret?' · A pagar Bs '+fmt2.format(g.net):''}</span>`:''}</h3>
+    <div class="tablebox"><table><thead><tr><th>Contrato</th><th>Pasajero</th><th>Check-in</th><th>Check-out</th><th class="num">Noches</th><th>Status</th><th>Observación</th><th class="num">Monto</th><th class="num">Monto Bs</th><th class="num">Retención Bs</th><th class="num">A pagar Bs</th><th>Factura</th></tr></thead><tbody>
+    ${g.list.map(r=>`<tr data-id="${esc(r.slug+'|'+r.id)}"><td>${esc(r.contrato)}</td><td class="pax">${esc(r.pasajero)}${r.nota?`<span class="sub">${esc(r.nota)}</span>`:''}</td><td>${fd(r.in)}</td><td>${fd(r.out)}</td><td class="num">${r.noches??''}</td><td>${r.status?`<span class="chip ${chipClass(r.status)}">${esc(r.status)}</span>`:''}</td><td>${esc(r.obs)}</td><td class="num">${r.rusd?money(r.rusd,r.moneda):(r.nota?'':'<span class="mut">sin monto</span>')}</td><td class="num">${r.rbs?fmt2.format(r.rbs):''}</td><td class="num">${r.rret?fmt2.format(r.rret):''}</td><td class="num">${r.rnet!=null?fmt2.format(r.rnet):''}</td><td>${esc(r.factura)}</td></tr>`).join('')}
+    </tbody></table></div></div>`).join('')+
+    `<div class="rgrand"><span><b>${n}</b> ${n===1?'reserva':'reservas'}</span><span><b>${groups.length}</b> ${groups.length===1?'hotel':'hoteles'}</span>${tu?`<span>Total $ <b>${fmt2.format(tu)}</b></span>`:''}${te?`<span>Total € <b>${fmt2.format(te)}</b></span>`:''}${tb?`<span>Total Bs <b>${fmt2.format(tb)}</b></span>`:''}${tr?`<span>Retenciones Bs <b>${fmt2.format(tr)}</b></span><span>A pagar Bs <b>${fmt2.format(tb-tr)}</b></span>`:''}</div>`;
+}
+$('#rBody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const [s2,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s2&&x.id===id);if(r)openSheet(r)});
+document.querySelectorAll('.rtabs button').forEach(b=>b.onclick=()=>{rType=b.dataset.r;renderReport()});
+$('#rDate').addEventListener('change',renderReport);
+const shift=n=>{const v=$('#rDate').value||todayStr();const d=new Date(v+'T12:00:00');d.setDate(d.getDate()+n);$('#rDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');renderReport()};
+$('#rPrev').onclick=()=>shift(-1); $('#rNext').onclick=()=>shift(1); $('#rToday').onclick=()=>{$('#rDate').value=todayStr();renderReport()};
+function rFile(ext){const {d}=reportData();return `${RT[rType].t.toUpperCase()} ${fd(d).replace(/\//g,'-')}.${ext}`}
+async function saveFile(name,data){
+  if(!downloads){toast('Descargar no está disponible en esta vista.');return}
+  try{await downloads.save({filename:name,data})}catch(e){if(e&&e.code!=='declined')toast('No se pudo descargar el archivo.')}
+}
+async function reportXlsx(){
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel.');return}
+  const {d,groups,n}=reportData(); if(!n){toast('No hay reservas para descargar en esta fecha.');return}
+  const aoa=[[ 'ONE WAY · '+RT[rType].t.toUpperCase()],[RT[rType].sub+' '+longDate(d)],[],['HOTEL','ESTADO','RETENCION','CONTRATO','NOMBRE DEL PASAJERO','IN','OUT','NOCHES','STATUS','OBSERVACION','MONTO','MONEDA','MONTO BS','RETENCION BS','A PAGAR BS','FACTURA','NOTA']];
+  const merges=[]; 
+  for(const g of groups){ for(const r of g.list) aoa.push([g.hotel,g.estado,pctLbl(g.pct),r.contrato,r.pasajero,r.in?new Date(r.in+'T12:00:00'):null,r.out?new Date(r.out+'T12:00:00'):null,r.noches,r.status,r.obs,r.rusd,r.rusd?(r.moneda==='EUR'?'€':'$'):null,r.rbs,r.rret,r.rnet,r.factura,r.nota||null]);
+    aoa.push(['TOTAL '+g.hotel,null,null,null,g.list.length+' reservas',null,null,null,null,null,g.usd||null,g.usd?(g.moneda==='EUR'?'€':'$'):null,g.bs||null,g.ret||null,g.bs?g.net:null,null,null]); aoa.push([]); }
+  aoa.push(['TOTAL GENERAL',null,null,null,n+' reservas',null,null,null,null,null,null,null,groups.reduce((s,g)=>s+g.bs,0)||null,groups.reduce((s,g)=>s+g.ret,0)||null,groups.reduce((s,g)=>s+g.net,0)||null]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true,dateNF:'dd/mm/yyyy'});
+  ws['!cols']=[{wch:24},{wch:12},{wch:13},{wch:14},{wch:38},{wch:11},{wch:11},{wch:7},{wch:12},{wch:20},{wch:11},{wch:7},{wch:14},{wch:13},{wch:14},{wch:10},{wch:28}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,RT[rType].t.slice(0,31));
+  await saveFile(rFile('xlsx'),XLSX.write(wb,{bookType:'xlsx',type:'array',cellDates:true}));
+}
+async function reportPdf(){
+  const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
+  const {d,groups,n}=reportData(); if(!n){toast('No hay reservas para descargar en esta fecha.');return}
+  const doc=new J({orientation:'landscape',unit:'pt',format:'letter'}); const W=doc.internal.pageSize.getWidth();
+  const navy=[16,80,122], sand=[201,153,95];
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...sand);doc.text('ONE',40,44);doc.setTextColor(...navy);doc.text('WAY',40+doc.getTextWidth('ONE'),44);
+  doc.setFontSize(14);doc.setTextColor(22,40,58);doc.text(RT[rType].t.toUpperCase(),W-40,40,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(93,111,128);
+  doc.text(RT[rType].sub+' '+longDate(d),W-40,56,{align:'right'});
+  doc.text(`${n} ${n===1?'reserva':'reservas'} · ${groups.length} ${groups.length===1?'hotel':'hoteles'}`,40,60);
+  let y=78;
+  for(const g of groups){
+    doc.autoTable({startY:y,margin:{left:40,right:40},theme:'grid',
+      head:[[{content:g.hotel+(g.estado?'  ·  '+g.estado:'')+'   ('+g.list.length+')   ·   Retención: '+pctLbl(g.pct),colSpan:6,styles:{halign:'left'}},{content:(g.usd?money(g.usd,g.moneda):'')+(g.bs?'   Bs '+fmt2.format(g.bs):'')+(g.ret?'   A pagar Bs '+fmt2.format(g.net):''),colSpan:5,styles:{halign:'right'}}],
+            ['Contrato','Pasajero','Check-in','Check-out','Noches','Status','Observación','Monto','Monto Bs','Retención','A pagar Bs']],
+      body:g.list.map(r=>[r.contrato||'',r.pasajero+(r.nota?'\n'+r.nota:''),fd(r.in),fd(r.out),r.noches??'',r.status||'',r.obs||'',r.rusd?money(r.rusd,r.moneda):'',r.rbs?fmt2.format(r.rbs):'',r.rret?fmt2.format(r.rret):'',r.rnet!=null?fmt2.format(r.rnet):'']),
+      styles:{fontSize:8.5,cellPadding:4,lineColor:[219,226,234],lineWidth:.5,textColor:[22,40,58]},
+      headStyles:{fillColor:navy,textColor:255,fontStyle:'bold'},
+      columnStyles:{1:{cellWidth:160},4:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'},10:{halign:'right'}},
+      didParseCell:h=>{if(h.section==='head'&&h.row.index===1){h.cell.styles.fillColor=[238,242,246];h.cell.styles.textColor=[93,111,128];h.cell.styles.fontSize=7.5}}});
+    y=doc.lastAutoTable.finalY+14;
+  }
+  const tu=groups.reduce((s,g)=>s+(g.moneda==='USD'?g.usd:0),0), te=groups.reduce((s,g)=>s+(g.moneda==='EUR'?g.usd:0),0), tb=groups.reduce((s,g)=>s+g.bs,0), trr=groups.reduce((s,g)=>s+g.ret,0);
+  if(y>doc.internal.pageSize.getHeight()-60){doc.addPage();y=50}
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+  doc.text(`TOTAL GENERAL: ${n} reservas`+(tu?`   ·   $ ${fmt2.format(tu)}`:'')+(te?`   ·   € ${fmt2.format(te)}`:'')+(tb?`   ·   Bs ${fmt2.format(tb)}`:'')+(trr?`   ·   Retenciones Bs ${fmt2.format(trr)}   ·   A pagar Bs ${fmt2.format(tb-trr)}`:''),40,y+6);
+  const pages=doc.internal.getNumberOfPages(); doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(150);
+  for(let i=1;i<=pages;i++){doc.setPage(i);doc.text(`Generado el ${fd(todayStr())} · Página ${i} de ${pages}`,W-40,doc.internal.pageSize.getHeight()-20,{align:'right'})}
+  await saveFile(rFile('pdf'),doc.output('arraybuffer'));
+}
+$('#rPdf').onclick=reportPdf; $('#rXls').onclick=reportXlsx;
+
+/* ---------- tasas BCV ---------- */
+let tasas={}, tasasV=false;
+const fmt4=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:4});
+function tasaFor(date,mon){
+  const k=mon==='EUR'?'eur':'usd', d=date||todayStr();
+  const ks=Object.keys(tasas).filter(x=>x<=d&&num(tasas[x]?.[k])!=null).sort();
+  const f=ks[ks.length-1]; return f?{v:tasas[f][k],fecha:f}:null;
+}
+function renderTasaBox(){
+  const t=todayStr(), r=tasas[t]||{};
+  if(document.activeElement!==$('#tUsd')) $('#tUsd').value=r.usd??'';
+  if(document.activeElement!==$('#tEur')) $('#tEur').value=r.eur??'';
+  const miss=num(r.usd)==null; $('#tasasBox').classList.toggle('missing',miss);
+  $('#tLbl').textContent=miss?'Falta la tasa de hoy':'BCV hoy';
+  $('#tUsd').disabled=$('#tEur').disabled=!canWrite;
+  if(!$('#tsheet').hidden) renderTasaHist();
+}
+const n2v=v=>{const x=parseFloat(v);return isFinite(x)?Math.round(x*10000)/10000:null};
+async function saveTasa(date,usd,eur){
+  if(!db){toast('Sin conexión con la base de datos.');return}
+  const obj={usd,eur,editado:new Date().toISOString()};
+  const ref=db.doc('config/tasas');
+  if(tasasV) await ref.update({items:{[date]:obj}}); else { await ref.set({items:{...tasas,[date]:obj}}); tasasV=true }
+}
+async function saveToday(){
+  const u=n2v($('#tUsd').value), e=n2v($('#tEur').value), t=todayStr(), old=tasas[t]||{};
+  if(u===(old.usd??null)&&e===(old.eur??null)) return;
+  try{ await saveTasa(t,u,e); toast('Tasa BCV del '+fd(t)+' guardada') }catch(err){ toast('No se pudo guardar la tasa.') }
+}
+$('#tUsd').addEventListener('change',saveToday); $('#tEur').addEventListener('change',saveToday);
+function renderTasaHist(){
+  const ks=Object.keys(tasas).sort().reverse();
+  $('#tTbl tbody').innerHTML=ks.length?ks.map(k=>`<tr data-t="${k}"><td>${fd(k)} <span class="sub">${DIAS[new Date(k+'T12:00:00').getDay()]}</span></td><td class="num">${num(tasas[k].usd)!=null?fmt4.format(tasas[k].usd):''}</td><td class="num">${num(tasas[k].eur)!=null?fmt4.format(tasas[k].eur):''}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">Todavía no hay tasas cargadas.</td></tr>';
+}
+function loadTF(){const r=tasas[$('#tF').value]||{};$('#tFU').value=r.usd??'';$('#tFE').value=r.eur??''}
+$('#tHist').onclick=()=>{$('#tF').value=todayStr();loadTF();renderTasaHist();$('#tFSave').disabled=!canWrite;$('#scrim').hidden=false;$('#tsheet').hidden=false};
+function closeT(){$('#tsheet').hidden=true;$('#scrim').hidden=true}
+$('#tClose').onclick=closeT; $('#tF').addEventListener('change',loadTF);
+$('#tTbl').addEventListener('click',e=>{const tr=e.target.closest('tr[data-t]');if(tr){$('#tF').value=tr.dataset.t;loadTF()}});
+$('#tFSave').onclick=async()=>{const d=$('#tF').value;if(!d){toast('Elige la fecha.');return}try{await saveTasa(d,n2v($('#tFU').value),n2v($('#tFE').value));toast('Tasa del '+fd(d)+' guardada')}catch(e){toast('No se pudo guardar la tasa.')}};
+$('#tform').addEventListener('submit',e=>{e.preventDefault();$('#tFSave').click()});
+let autoBcv=null;
+function hotelMon(){return allHotels()[upN(F.eHotel.value)]?.moneda||editing?.moneda||'USD'}
+function recalcFromBcv(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(u>0&&t>0)F.eBs.value=(u*t).toFixed(2);else if(b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)}
+function retHint(){const pc=hotelPct(F.eHotel.value),b=parseFloat(F.eBs.value);const el=$('#retHint');if(!F.eHotel.value.trim()){el.textContent='';return}
+  el.innerHTML=pc==null?'Retención de este hotel: sin definir (configúrala en Resumen por hotel → Editar).':(+pc===0?'Este hotel no tiene retención.':`Retención ${pc}% del IVA${b>0?`: Bs ${fmt2.format(retOf(b,pc))} · a pagar al hotel Bs <b>${fmt2.format(b-retOf(b,pc))}</b>`:''}`)}
+function bcvHint(){ retHint();
+  const mon=hotelMon(), r=tasaFor(todayStr(),mon), el=$('#bcvHint');
+  $('#lblUsd').textContent=mon==='EUR'?'Monto €':'Monto $';
+  if(!r){el.textContent=`No hay tasa BCV ${mon==='EUR'?'en €':'en $'} cargada. Escríbela arriba, en “BCV hoy”.`;return}
+  const same=num(parseFloat(F.eBcv.value))===num(r.v);
+  el.innerHTML=`Tasa BCV ${mon==='EUR'?'€':'$'} del ${fd(r.fecha)}: <b>${fmt4.format(r.v)}</b>${same?' (aplicada)':` <button type="button" class="ratebtn" id="useRate">Usar esta tasa</button>`}`;
+  $('#useRate')&&($('#useRate').onclick=()=>{F.eBcv.value=r.v;autoBcv=String(r.v);recalcFromBcv();bcvHint()});
+}
+function autoFillBcv(){
+  if(editing) return bcvHint();
+  const cur=F.eBcv.value; if(cur&&cur!==autoBcv) return bcvHint();
+  const r=tasaFor(todayStr(),hotelMon()); if(r){F.eBcv.value=r.v;autoBcv=String(r.v);recalcFromBcv()} bcvHint();
+}
+F.eHotel.addEventListener('input',autoFillBcv); ['input','change'].forEach(ev=>{F.eBs.addEventListener(ev,retHint);F.eUsd.addEventListener(ev,retHint)}); F.eHotel.addEventListener('change',autoFillBcv); F.eBcv.addEventListener('input',bcvHint);
+
+async function setHotelPct(name,pct){
+  const m=allHotels()[upN(name)]; if(!m) return;
+  const meta={nombre:m.nombre,estado:m.estado,categoria:m.categoria,moneda:m.moneda,retencion:pct};
+  await writeCatalog(m.slug,meta); if(hotels[m.slug]) await col().doc(m.slug).update({retencion:pct});
+}
+document.addEventListener('click',e=>{if(e.target.closest('.pctsel'))e.stopPropagation()},true);
+document.addEventListener('change',async e=>{
+  const sel=e.target.closest('.pctsel'); if(!sel) return;
+  const pct=sel.value===''?null:+sel.value;
+  try{
+    if(sel.dataset.hret!=null){ await setHotelPct(sel.dataset.hret,pct); toast('Retención de '+sel.dataset.hret+': '+pctLbl(pct)) }
+    else if(sel.dataset.cret){ const id=sel.dataset.cret, d=deu.items[id]; await saveDeuItems({items:{[id]:{...d,ret_pct:pct,retenciones:pct>0}}}); try{await setHotelPct(d.hotel,pct)}catch(x){} toast('Retención de '+d.hotel+': '+pctLbl(pct)) }
+  }catch(err){ toast('No se pudo guardar la retención.') }
+});
+
+/* ---------- créditos ---------- */
+let cTab='estatus', deu={fecha_corte:null,tasa:null,items:{}}, deuV=false, pag={items:{}}, pagV=false, cEdit=null, pEdit=null, cBase='usd';
+const n2=v=>{const x=parseFloat(v);return isFinite(x)?Math.round(x*100)/100:null};
+const RET=0.14/1.16;
+function dVals(d){const t=num(d.tasa);let usd=num(d.usd),bs=num(d.bs);if(d.base==='bs'){if(bs!=null&&t)usd=bs/t}else{if(usd!=null&&t)bs=usd*t}return{usd,bs,t}}
+function credHotels(){return Object.values(deu.items||{}).filter(Boolean).map(d=>d.hotel)}
+function renderCred(){
+  document.querySelectorAll('.rtabs [data-c]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.c===cTab)));
+  $('#cEstatus').hidden=cTab!=='estatus'; $('#cPagos').hidden=cTab!=='pagos';
+  $('#dlCredH').innerHTML=[...new Set([...credHotels(),...Object.values(pag.items||{}).filter(Boolean).map(p=>p.hotel)])].sort().map(h=>`<option value="${esc(h)}">`).join('');
+  ['#cAdd','#cTasaAll','#pAdd'].forEach(x=>$(x).hidden=!canWrite);
+  cTab==='estatus'?renderEstatus():renderPagos();
+}
+function deudaList(){return Object.entries(deu.items||{}).filter(([,d])=>d&&!d._borrado).map(([id,d])=>{const v=dVals(d),pc=d.ret_pct??hotelPct(d.hotel),r=retOf(v.bs,pc);return {id,...d,...v,pct:pc,ret:r,net:v.bs!=null?v.bs-r:null}}).sort((a,b)=>(b.usd||0)-(a.usd||0))}
+function renderEstatus(){
+  if(document.activeElement!==$('#cCorte')) $('#cCorte').value=deu.fecha_corte||'';
+  if(document.activeElement!==$('#cTasa')) $('#cTasa').value=tasaFor(todayStr(),'USD')?.v??deu.tasa??'';
+  const L=deudaList(), tu=L.reduce((s,d)=>s+(d.usd||0),0), tb=L.reduce((s,d)=>s+(d.bs||0),0), tr=L.reduce((s,d)=>s+(d.ret||0),0);
+  $('#cSum').innerHTML=[['$ '+fmt2.format(tu),'Total deuda en $'],['Bs '+fmt2.format(tb),'Total deuda en Bs'],['Bs '+fmt2.format(tr),'Retenciones'],['Bs '+fmt2.format(tb-tr),'A pagar a hoteles'],[L.length,'Hoteles con saldo']].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#cTbl thead').innerHTML='<tr><th>Hotel</th><th class="num">Monto $</th><th class="num">Tasa BCV</th><th class="num">Monto Bs</th><th>Retención</th><th class="num">Retención Bs</th><th class="num">A pagar Bs</th><th>Estatus</th></tr>';
+  $('#cTbl tbody').innerHTML=L.length?L.map(d=>`<tr data-c="${d.id}"><td class="hotel">${esc(d.hotel)}<span class="sub">${d.base==='bs'?'Llevado en Bs':'Llevado en $'}</span></td><td class="num"><b>${d.usd!=null?fmt2.format(d.usd):''}</b></td><td class="num">${d.t!=null?fmt2.format(d.t):''}</td><td class="num">${d.bs!=null?fmt2.format(d.bs):''}</td><td>${pctSel(`data-cret="${d.id}"`,d.pct,d.retenciones)}</td><td class="num">${d.ret?fmt2.format(d.ret):''}</td><td class="num"><b>${d.net!=null?fmt2.format(d.net):''}</b></td><td>${esc(d.estatus||'')}</td></tr>`).join('')
+    :'<tr><td colspan="8" class="empty">No hay hoteles con crédito registrados. Usa “+ Agregar hotel con crédito”.</td></tr>';
+  let tf=$('#cTbl tfoot'); if(!tf){tf=document.createElement('tfoot');$('#cTbl').appendChild(tf)}
+  tf.innerHTML=L.length?`<tr><td>TOTAL</td><td class="num">${fmt2.format(tu)}</td><td></td><td class="num">${fmt2.format(tb)}</td><td></td><td class="num">${fmt2.format(tr)}</td><td class="num">${fmt2.format(tb-tr)}</td><td></td></tr>`:'';
+}
+function pagosList(){
+  const h=upN($('#pHotelF').value), a=$('#pDesde').value, b=$('#pHasta').value, hist=$('#pHist').checked;
+  return Object.entries(pag.items||{}).filter(([,p])=>p&&!p._borrado).map(([id,p])=>({id,...p}))
+    .filter(p=>(!h||upN(p.hotel).includes(h))&&(p.fecha?((!a||p.fecha>=a)&&(!b||p.fecha<=b)):hist));
+}
+function renderPagos(){
+  const L=pagosList(), by={};
+  for(const p of L){const k=p.fecha||'~';(by[k]=by[k]||[]).push(p)}
+  const keys=Object.keys(by).sort().reverse();
+  const tu=L.reduce((s,p)=>s+(num(p.usd)||0),0), tb=L.reduce((s,p)=>s+(num(p.bs)||0),0), tr=L.reduce((s,p)=>s+(num(p.ret)||0),0);
+  $('#pSum').innerHTML=[[L.length,'Pagos'],['$ '+fmt2.format(tu),'Total en $'],['Bs '+fmt2.format(tb),'Total en Bs'],['Bs '+fmt2.format(tr),'Retenciones']].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#pBody').innerHTML=keys.length?keys.map(k=>{const ps=by[k].sort((a,b)=>(a.orden||0)-(b.orden||0)), su=ps.reduce((s,p)=>s+(num(p.usd)||0),0), sb=ps.reduce((s,p)=>s+(num(p.bs)||0),0);
+    return `<div class="rhotel lote"><h3>${k==='~'?'Historial del Excel (sin fecha)':'Pagos del '+longDate(k)}<span class="sub">${ps.length} ${ps.length===1?'pago':'pagos'}</span><span class="tot">$ ${fmt2.format(su)} · Bs ${fmt2.format(sb)}</span></h3>
+    <div class="tablebox"><table><thead><tr><th>Hotel</th><th class="num">$</th><th class="num">Tasa</th><th class="num">Bs</th><th>Observación</th><th>Estatus</th><th class="num">Pago hotel Bs</th><th class="num">Retención Bs</th></tr></thead><tbody>
+    ${ps.map(p=>`<tr data-p="${p.id}"><td class="hotel">${esc(p.hotel)}</td><td class="num">${num(p.usd)!=null?fmt2.format(p.usd):''}</td><td class="num">${num(p.tasa)!=null?fmt2.format(p.tasa):''}</td><td class="num">${num(p.bs)!=null?fmt2.format(p.bs):''}</td><td>${p.retenciones?`<span class="chip info">RETENCIÓN${p.ret_pct?' '+p.ret_pct+'%':''}</span> `:''}${esc(p.obs||'')}</td><td>${p.estatus?`<span class="chip ${/LISTO|PAGADO|CARGADO/.test(p.estatus)?'ok':'warn'}">${esc(p.estatus)}</span>`:''}</td><td class="num">${num(p.ret_hotel)!=null?fmt2.format(p.ret_hotel):''}</td><td class="num">${num(p.ret)!=null?fmt2.format(p.ret):''}</td></tr>`).join('')}
+    </tbody></table></div></div>`}).join('')
+    :`<div class="empty"><h2>No hay pagos en este rango</h2><p>Cambia las fechas, marca “Incluir historial sin fecha” o registra un pago nuevo.</p></div>`;
+}
+async function saveDeuItems(patch){ // patch: {fecha_corte?, tasa?, items?:{id:obj}}
+  if(!db){toast('Sin conexión con la base de datos.');return false}
+  const ref=db.doc('creditos/deudas');
+  if(deuV) await ref.update(patch); else { await ref.set({fecha_corte:deu.fecha_corte||null,tasa:deu.tasa??null,items:{},...patch,items:{...(deu.items||{}),...(patch.items||{})}}); deuV=true }
+  return true;
+}
+async function savePagItem(id,obj){ const ref=db.doc('creditos/pagos'); if(pagV) await ref.update({items:{[id]:obj}}); else { await ref.set({items:{...(pag.items||{}),[id]:obj}}); pagV=true } }
+// estatus sheet
+function setBase(b){cBase=b;document.querySelectorAll('#cBase .chip').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b===b)));$('#cUsd').readOnly=b==='bs';$('#cBs').readOnly=b==='usd';recalcC()}
+function cRetUpd(){const pc=$('#cRetP').value,b=n2($('#cBs').value);$('#cRetHint').innerHTML=pc===''||+pc===0||!b?'':`Retención Bs ${fmt2.format(retOf(b,+pc))} · a pagar al hotel Bs <b>${fmt2.format(b-retOf(b,+pc))}</b>`}
+function recalcC(){setTimeout(cRetUpd);const t=n2($('#cTasaE').value);if(!t)return;if(cBase==='usd'){const u=n2($('#cUsd').value);$('#cBs').value=u!=null?(u*t).toFixed(2):''}else{const b=n2($('#cBs').value);$('#cUsd').value=b!=null?(b/t).toFixed(2):''}}
+['#cUsd','#cBs','#cTasaE'].forEach(x=>$(x).addEventListener('input',recalcC)); $('#cRetP').addEventListener('change',cRetUpd);
+$('#cBase').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)setBase(b.dataset.b)});
+function openC(id){
+  const d=id?deu.items[id]:null; cEdit=id||null; $('#cTitle').textContent=d?'Crédito de '+d.hotel:'Agregar hotel con crédito';
+  $('#cHotel').value=d?.hotel||''; $('#cUsd').value=d?.usd??''; $('#cBs').value=d?.bs??''; $('#cTasaE').value=d?.tasa??tasaFor(todayStr(),allHotels()[upN($('#cHotel').value)]?.moneda)?.v??deu.tasa??''; $('#cRetP').value=(d?.ret_pct??hotelPct(d?.hotel||''))!=null?String(d?.ret_pct??hotelPct(d.hotel)):''; $('#cEst').value=d?.estatus||'';
+  setBase(d?.base||'usd'); $('#cDel').hidden=!d; $('#cDelOk').hidden=true; $('#cSave').disabled=!canWrite;
+  $('#scrim').hidden=false; $('#csheet').hidden=false; setTimeout(()=>$(d?'#cUsd':'#cHotel').focus(),50);
+}
+function closeC(){$('#csheet').hidden=true;$('#scrim').hidden=true;cEdit=null}
+async function saveC(){
+  const hotel=upN($('#cHotel').value); if(!hotel){toast('Escribe el hotel.');return}
+  const dup=Object.entries(deu.items||{}).find(([id,d])=>d&&!d._borrado&&upN(d.hotel)===hotel&&id!==cEdit); if(dup){toast('Ese hotel ya está en créditos. Ábrelo desde la tabla para cambiar el monto.');return}
+  recalcC();
+  const id=cEdit||('d'+Date.now().toString(36)), old=cEdit?deu.items[cEdit]:{};
+  const obj={hotel,base:cBase,usd:n2($('#cUsd').value),bs:n2($('#cBs').value),tasa:n2($('#cTasaE').value),ret_pct:$('#cRetP').value===''?null:+$('#cRetP').value,retenciones:$('#cRetP').value!==''&&+$('#cRetP').value>0,estatus:$('#cEst').value.trim()||null,orden:old.orden??Date.now(),editado:new Date().toISOString()};
+  try{ if(await saveDeuItems({items:{[id]:obj}})){ const m=allHotels()[hotel]; if(m&&obj.ret_pct!=null&&m.retencion!==obj.ret_pct){ try{await writeCatalog(m.slug,{nombre:m.nombre,estado:m.estado,categoria:m.categoria,moneda:m.moneda,retencion:obj.ret_pct})}catch(e){} } toast(cEdit?'Crédito actualizado':'Hotel agregado a créditos');closeC()} }catch(e){toast('No se pudo guardar. Inténtalo de nuevo.')}
+}
+async function delC(){ try{ await saveDeuItems({items:{[cEdit]:{_borrado:true}}}); toast('Hotel quitado de créditos'); closeC() }catch(e){toast('No se pudo quitar.')} }
+// pagos sheet
+function retCalc(){const on=+$('#pRetP').value>0;$('#pRetH').hidden=!on;$('#pRetR').hidden=!on;$('#pRetHint').hidden=!on;}
+function autoRet(){const pc=+$('#pRetP').value;if(!pc)return;const b=n2($('#pBs').value);if(b==null)return;const r=retOf(b,pc);$('#pRR').value=r.toFixed(2);$('#pRH').value=(b-r).toFixed(2)}
+$('#pRetP').addEventListener('change',()=>{retCalc();autoRet()});
+$('#pUsd').addEventListener('input',()=>{const u=n2($('#pUsd').value),t=n2($('#pTasa').value);if(u!=null&&t)$('#pBs').value=(u*t).toFixed(2);autoRet()});
+$('#pTasa').addEventListener('input',()=>{const u=n2($('#pUsd').value),t=n2($('#pTasa').value),b=n2($('#pBs').value);if(u!=null&&t)$('#pBs').value=(u*t).toFixed(2);else if(b!=null&&t)$('#pUsd').value=(b/t).toFixed(2);autoRet()});
+$('#pBs').addEventListener('input',()=>{const t=n2($('#pTasa').value),b=n2($('#pBs').value);if(b!=null&&t&&!n2($('#pUsd').value))$('#pUsd').value=(b/t).toFixed(2);autoRet()});
+function updResta(){const h=upN($('#pHotel').value);const d=Object.values(deu.items||{}).find(x=>x&&!x._borrado&&upN(x.hotel)===h);$('#pRestaW').hidden=!!pEdit||!d;if(d){const v=dVals(d);$('#pRestaTxt').textContent=`Restar este pago de la deuda de ${d.hotel} (hoy $ ${fmt2.format(v.usd||0)})`}}
+$('#pFecha').addEventListener('change',()=>{if(!pEdit){const r=tasaFor($('#pFecha').value,allHotels()[upN($('#pHotel').value)]?.moneda);if(r){$('#pTasa').value=r.v;$('#pTasa').dispatchEvent(new Event('input'))}}});
+$('#pHotel').addEventListener('input',()=>{if(!pEdit){const r=tasaFor($('#pFecha').value,allHotels()[upN($('#pHotel').value)]?.moneda);if(r)$('#pTasa').value=r.v}updResta();const h=upN($('#pHotel').value);const d=Object.values(deu.items||{}).find(x=>x&&!x._borrado&&upN(x.hotel)===h);if(!pEdit){const pc=d?(d.ret_pct??hotelPct(d.hotel)):hotelPct($('#pHotel').value);$('#pRetP').value=String(pc??0);retCalc();autoRet()}});
+function openP(id){
+  const p=id?pag.items[id]:null; pEdit=id||null; $('#pTitle').textContent=p?'Editar pago':'Registrar pago';
+  $('#pFecha').value=p?(p.fecha||''):todayStr(); $('#pHotel').value=p?.hotel||upN($('#pHotelF').value)||''; $('#pUsd').value=p?.usd??''; $('#pTasa').value=p?.tasa??(tasaFor($('#pFecha').value,allHotels()[upN($('#pHotel').value)]?.moneda)?.v)??deu.tasa??''; $('#pBs').value=p?.bs??'';
+  $('#pEst').value=p?.estatus||''; $('#pRetP').value=String(p?.ret_pct??(p?.retenciones?75:(p?0:(hotelPct($('#pHotel').value)??0)))); $('#pRH').value=p?.ret_hotel??''; $('#pRR').value=p?.ret??''; $('#pObs').value=p?.obs||''; $('#pResta').checked=true;
+  retCalc(); updResta(); $('#pDel').hidden=!p; $('#pDelOk').hidden=true; $('#pSave').disabled=!canWrite;
+  $('#scrim').hidden=false; $('#psheet').hidden=false; setTimeout(()=>$(p?'#pUsd':'#pHotel').focus(),50);
+}
+function closeP(){$('#psheet').hidden=true;$('#scrim').hidden=true;pEdit=null}
+async function saveP(){
+  if(!db){toast('Sin conexión con la base de datos.');return}
+  const hotel=upN($('#pHotel').value); if(!hotel){toast('Escribe el hotel.');return}
+  const id=pEdit||('p'+Date.now().toString(36)), old=pEdit?pag.items[pEdit]:{};
+  const fecha=$('#pFecha').value||null;
+  const obj={fecha,lote:fecha?'Pagos del '+fd(fecha):(old.lote||'Sin fecha'),hotel,usd:n2($('#pUsd').value),bs:n2($('#pBs').value),tasa:n2($('#pTasa').value),ret_pct:+$('#pRetP').value,retenciones:+$('#pRetP').value>0,ret_hotel:+$('#pRetP').value>0?n2($('#pRH').value):null,ret:+$('#pRetP').value>0?n2($('#pRR').value):null,estatus:upN($('#pEst').value)||null,obs:$('#pObs').value.trim()||null,orden:old.orden??Date.now(),editado:new Date().toISOString()};
+  try{
+    await savePagItem(id,obj);
+    if(!pEdit&&$('#pResta').checked&&!$('#pRestaW').hidden){
+      const e=Object.entries(deu.items||{}).find(([,x])=>x&&!x._borrado&&upN(x.hotel)===hotel);
+      if(e){const [did,d]=e; const nd={...d,editado:new Date().toISOString()};
+        if(d.base==='bs'){const t=num(obj.tasa)||num(d.tasa);const pb=num(obj.bs)??(num(obj.usd)!=null&&t?obj.usd*t:0);nd.bs=Math.round(((num(d.bs)||0)-pb)*100)/100}
+        else{const t=num(obj.tasa)||num(d.tasa);const pu=num(obj.usd)??(num(obj.bs)!=null&&t?obj.bs/t:0);nd.usd=Math.round(((num(d.usd)||0)-pu)*100)/100}
+        await saveDeuItems({items:{[did]:nd}});}
+    }
+    toast(pEdit?'Pago actualizado':'Pago registrado'); closeP();
+  }catch(e){toast('No se pudo guardar el pago. Inténtalo de nuevo.')}
+}
+async function delP(){ try{ await savePagItem(pEdit,{_borrado:true}); toast('Pago eliminado'); closeP() }catch(e){toast('No se pudo eliminar.')} }
+// events
+document.querySelectorAll('.rtabs [data-c]').forEach(b=>{if(b.tagName==='BUTTON')b.onclick=()=>{cTab=b.dataset.c;renderCred()}});
+$('#cTbl').addEventListener('click',e=>{const tr=e.target.closest('tr[data-c]');if(tr)openC(tr.dataset.c)});
+$('#pBody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-p]');if(tr)openP(tr.dataset.p)});
+$('#cAdd').onclick=()=>openC(null); $('#cClose').onclick=closeC; $('#cCancel').onclick=closeC; $('#cSave').onclick=saveC; $('#cform').addEventListener('submit',e=>{e.preventDefault();saveC()});
+$('#cDel').onclick=()=>{$('#cDel').hidden=true;$('#cDelOk').hidden=false}; $('#cDelOk').onclick=delC;
+$('#pAdd').onclick=()=>openP(null); $('#pClose').onclick=closeP; $('#pCancel').onclick=closeP; $('#pSave').onclick=saveP; $('#pform').addEventListener('submit',e=>{e.preventDefault();saveP()});
+$('#pDel').onclick=()=>{$('#pDel').hidden=true;$('#pDelOk').hidden=false}; $('#pDelOk').onclick=delP;
+['#pHotelF','#pDesde','#pHasta','#pHist'].forEach(x=>$(x).addEventListener(x==='#pHist'?'change':'input',renderPagos));
+$('#cCorte').addEventListener('change',async()=>{try{await saveDeuItems({fecha_corte:$('#cCorte').value||null});toast('Fecha del estatus actualizada')}catch(e){toast('No se pudo guardar la fecha.')}});
+$('#cTasa').addEventListener('change',async()=>{try{await saveDeuItems({tasa:n2($('#cTasa').value)});toast('Tasa del día guardada')}catch(e){toast('No se pudo guardar la tasa.')}});
+$('#cTasaAll').onclick=async()=>{const t=n2($('#cTasa').value);if(!t){toast('Escribe la tasa del día primero.');return}
+  const items={};for(const [id,d] of Object.entries(deu.items||{}))if(d&&!d._borrado)items[id]={...d,tasa:t};
+  try{await saveDeuItems({tasa:t,items});toast('Tasa '+fmt2.format(t)+' aplicada a todos los hoteles')}catch(e){toast('No se pudo aplicar la tasa.')}};
+// exports
+function cStamp(){return deu.fecha_corte?fd(deu.fecha_corte).replace(/\//g,'-'):fd(todayStr()).replace(/\//g,'-')}
+async function credXlsx(){
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel.');return}
+  const wb=XLSX.utils.book_new(), L=deudaList();
+  const R=v=>v!=null?Math.round(v*100)/100:null;
+  const a=[['ESTATUS DE CUENTAS POR PAGAR AL '+(deu.fecha_corte?fd(deu.fecha_corte):'')],[],['HOTEL','MONTO BS','MONTO $','TASA BCV','RETENCION','RETENCION BS','A PAGAR BS','ESTATUS']];
+  for(const d of L)a.push([d.hotel,R(d.bs),R(d.usd),d.t,pctLbl(d.pct),R(d.ret)||null,R(d.net),d.estatus||null]);
+  a.push([],['TOTAL',R(L.reduce((s,d)=>s+(d.bs||0),0)),R(L.reduce((s,d)=>s+(d.usd||0),0)),null,null,R(L.reduce((s,d)=>s+(d.ret||0),0)),R(L.reduce((s,d)=>s+(d.net||0),0))]);
+  const ws=XLSX.utils.aoa_to_sheet(a); ws['!cols']=[{wch:26},{wch:18},{wch:14},{wch:11},{wch:14},{wch:15},{wch:18},{wch:30}]; XLSX.utils.book_append_sheet(wb,ws,'TOTAL DE HOTELES');
+  const P=pagosList().sort((x,y)=>(y.fecha||'')<(x.fecha||'')?-1:(y.fecha||'')>(x.fecha||'')?1:(x.orden||0)-(y.orden||0));
+  const b=[['FECHA','HOTEL','$','BS','TASA','OBSERVACION','ESTATUS','PAGO HOTEL BS','RETENCION BS']];
+  for(const p of P)b.push([p.fecha?new Date(p.fecha+'T12:00:00'):'sin fecha',p.hotel,p.usd,p.bs,p.tasa,[p.retenciones?'RETENCION'+(p.ret_pct?' '+p.ret_pct+'%':''):'',p.obs||''].filter(Boolean).join(' · ')||null,p.estatus,p.ret_hotel,p.ret]);
+  const ws2=XLSX.utils.aoa_to_sheet(b,{cellDates:true,dateNF:'dd/mm/yyyy'}); ws2['!cols']=[{wch:11},{wch:26},{wch:12},{wch:14},{wch:9},{wch:34},{wch:10},{wch:14},{wch:13}]; XLSX.utils.book_append_sheet(wb,ws2,'PAGOS');
+  await saveFile(`DEUDA HOTELES ${cStamp()}.xlsx`,XLSX.write(wb,{bookType:'xlsx',type:'array',cellDates:true}));
+}
+async function credPdf(){
+  const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
+  const doc=new J({orientation:'portrait',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), navy=[16,80,122], sand=[201,153,95];
+  const head=(t,sub)=>{doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...sand);doc.text('ONE',40,44);doc.setTextColor(...navy);doc.text('WAY',40+doc.getTextWidth('ONE'),44);doc.setFontSize(13);doc.setTextColor(22,40,58);doc.text(t,W-40,40,{align:'right'});doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(93,111,128);doc.text(sub,W-40,56,{align:'right'})};
+  const st={styles:{fontSize:9,cellPadding:4,lineColor:[219,226,234],lineWidth:.5,textColor:[22,40,58]},headStyles:{fillColor:navy,textColor:255},footStyles:{fillColor:[238,242,246],textColor:[22,40,58],fontStyle:'bold'},margin:{left:40,right:40},theme:'grid'};
+  if(cTab==='estatus'){
+    const L=deudaList(); head('ESTATUS DE CUENTAS POR PAGAR','Al '+(deu.fecha_corte?longDate(deu.fecha_corte):'—'));
+    doc.autoTable({...st,startY:76,head:[['Hotel','Monto $','Tasa BCV','Monto Bs','Retención','Retención Bs','A pagar Bs','Estatus']],
+      body:L.map(d=>[d.hotel,d.usd!=null?fmt2.format(d.usd):'',d.t!=null?fmt2.format(d.t):'',d.bs!=null?fmt2.format(d.bs):'',pctLbl(d.pct),d.ret?fmt2.format(d.ret):'',d.net!=null?fmt2.format(d.net):'',d.estatus||'']),
+      foot:[['TOTAL',fmt2.format(L.reduce((s,d)=>s+(d.usd||0),0)),'',fmt2.format(L.reduce((s,d)=>s+(d.bs||0),0)),'',fmt2.format(L.reduce((s,d)=>s+(d.ret||0),0)),fmt2.format(L.reduce((s,d)=>s+(d.net||0),0)),'']],
+      styles:{...st.styles,fontSize:8},columnStyles:{0:{cellWidth:100},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},5:{halign:'right'},6:{halign:'right',fontStyle:'bold'}},didParseCell:h=>{if((h.section==='head'||h.section==='foot')&&[1,2,3,5,6].includes(h.column.index))h.cell.styles.halign='right'}});
+  } else {
+    const P=pagosList(); if(!P.length){toast('No hay pagos para descargar con estos filtros.');return}
+    const a=$('#pDesde').value,b=$('#pHasta').value; head('PAGOS A HOTELES',(a||b)?`Del ${a?fd(a):'inicio'} al ${b?fd(b):'hoy'}`:'Todos los pagos');
+    const by={};for(const p of P)(by[p.fecha||'~']=by[p.fecha||'~']||[]).push(p);let y=76;
+    for(const k of Object.keys(by).sort().reverse()){const ps=by[k];
+      doc.autoTable({...st,startY:y,head:[[{content:k==='~'?'Historial sin fecha':'Pagos del '+fd(k),colSpan:4,styles:{halign:'left'}},{content:'$ '+fmt2.format(ps.reduce((s,p)=>s+(num(p.usd)||0),0))+'   Bs '+fmt2.format(ps.reduce((s,p)=>s+(num(p.bs)||0),0)),colSpan:4,styles:{halign:'right'}}],['Hotel','$','Tasa','Bs','Observación','Estatus','Pago hotel','Retención']],
+        body:ps.map(p=>[p.hotel,num(p.usd)!=null?fmt2.format(p.usd):'',num(p.tasa)!=null?fmt2.format(p.tasa):'',num(p.bs)!=null?fmt2.format(p.bs):'',[p.retenciones?'RET.'+(p.ret_pct?' '+p.ret_pct+'%':''):'',p.obs||''].filter(Boolean).join(' · '),p.estatus||'',num(p.ret_hotel)!=null?fmt2.format(p.ret_hotel):'',num(p.ret)!=null?fmt2.format(p.ret):'']),
+        styles:{...st.styles,fontSize:8},columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},6:{halign:'right'},7:{halign:'right'}},
+        didParseCell:h=>{if(h.section==='head'&&h.row.index===1){h.cell.styles.fillColor=[238,242,246];h.cell.styles.textColor=[93,111,128]}}});
+      y=doc.lastAutoTable.finalY+14;}
+  }
+  const pages=doc.internal.getNumberOfPages();doc.setFontSize(8);doc.setTextColor(150);
+  for(let i=1;i<=pages;i++){doc.setPage(i);doc.text(`Generado el ${fd(todayStr())} · Página ${i} de ${pages}`,W-40,doc.internal.pageSize.getHeight()-20,{align:'right'})}
+  await saveFile(cTab==='estatus'?`ESTATUS CUENTAS POR PAGAR ${cStamp()}.pdf`:`PAGOS A HOTELES ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
+}
+$('#cPdf').onclick=credPdf; $('#cXls').onclick=credXlsx;
+
+/* ---------- horizontal scroll ---------- */
+(()=>{const box=$('#tblBox');const step=()=>Math.max(240,box.clientWidth*0.6);
+$('#scrL').onclick=()=>box.scrollBy({left:-step(),behavior:'smooth'});
+$('#scrR').onclick=()=>box.scrollBy({left:step(),behavior:'smooth'});
+const upd=()=>{const max=box.scrollWidth-box.clientWidth;$('#scrL').disabled=box.scrollLeft<=2;$('#scrR').disabled=box.scrollLeft>=max-2;$('.hscroll').hidden=max<=2};
+box.addEventListener('scroll',upd,{passive:true});window.addEventListener('resize',upd);new MutationObserver(upd).observe(box,{childList:true,subtree:true});upd();})();
+
+/* ---------- boot ---------- */
+render(); renderTasaBox();
+(async()=>{
+  try{ const u=await claude.use('user'); const c=u?await u.can('data.write'):null; if(c===false){canWrite=false;$('#newBtn').hidden=true;$('#newHotelBtn').hidden=true} }catch(e){}
+  try{ downloads=await claude.use('downloads') }catch(e){} if(!downloads) $('#exportBtn').hidden=true;
+  try{ db=await claude.use('db') }catch(e){}
+  if(!db){ setSync('err','Sin conexión'); loaded=true; $('#emptyTitle').textContent='No se pudo abrir la base de datos'; $('#emptyTxt').textContent='Abre esta página desde claude.ai con tu cuenta para ver y registrar reservas.'; render(); return }
+  db.doc('config/general').onSnapshot(d=>{const a=(d.exists&&d.data().anios)||[2026];anios=[...new Set(a.map(Number))].sort((x,y)=>x-y);if(!anios.includes(year))openYear(anios[anios.length-1]);else fillYears()},()=>{});
+  db.doc('config/tasas').onSnapshot(d=>{tasasV=d.exists;tasas=(d.exists&&d.data().items)||{};renderTasaBox();if(!$('#sheet').hidden)bcvHint();if(view==='creditos')renderCred()},()=>{});
+  db.doc('creditos/deudas').onSnapshot(d=>{deuV=d.exists;deu=d.exists?d.data():{fecha_corte:null,tasa:null,items:{}};if(view==='creditos')renderCred()},()=>{});
+  db.doc('creditos/pagos').onSnapshot(d=>{pagV=d.exists;pag=d.exists?d.data():{items:{}};if(view==='creditos')renderCred()},()=>{});
+  db.doc('config/hoteles').onSnapshot(d=>{catalogExists=d.exists;catalog=(d.exists&&d.data().lista)||{};fillFilters();render()},()=>{});
+  openYear(year);
+})();
+})();
+</script>
+
+<div class="scrim" id="usScrim" hidden></div>
+<aside class="sheet" id="usSheet" hidden aria-labelledby="usTitle">
+  <header><h2 id="usTitle">Usuarios del sistema</h2><button class="ghost" id="usClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form onsubmit="return false" style="display:flex;flex-direction:column;gap:14px">
+    <div class="sec">Nuevo usuario</div>
+    <div class="addu">
+      <div class="f"><label for="usNom">Nombre</label><input id="usNom"></div>
+      <div class="f"><label for="usMail">Correo</label><input id="usMail" type="email"></div>
+      <div class="f"><label for="usPass">Contraseña inicial</label><input id="usPass" type="text" placeholder="Mínimo 6 caracteres"></div>
+      <div class="f"><label for="usRol">Rol</label><select id="usRol"><option value="agente">Agente</option><option value="admin">Administrador</option></select></div>
+    </div>
+    <button class="primary" id="usAdd" type="button">Crear usuario</button>
+    <p class="hint">Agente: registra y edita reservas, hoteles, tasas y reportes. Administrador: además ve Créditos y gestiona usuarios. Para quitarle el acceso a alguien, desmarca “Activo”.</p>
+    <div id="usNote" role="status"></div>
+    <div class="sec">Usuarios</div>
+    <div class="tablebox"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Acceso</th><th></th></tr></thead><tbody id="usList"></tbody></table></div>
+    <div class="sec">Importar datos</div>
+    <p class="hint">Carga aquí el archivo de exportación (.json) para pasar los datos al sistema.</p>
+    <input type="file" id="usImport" accept=".json,application/json">
+    <p class="hint" id="usImpTxt"></p>
+    <button class="danger" id="usImpOk" type="button" hidden>Importar ahora</button>
+  </form>
+</aside>
+</body>
+</html>

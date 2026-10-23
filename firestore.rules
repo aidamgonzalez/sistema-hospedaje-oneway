@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function perfil() { return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data; }
+    function activo() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && perfil().activo == true;
+    }
+    function esAdmin() { return activo() && perfil().rol == 'admin'; }
+
+    // Usuarios: cada uno ve su perfil; el administrador los gestiona todos.
+    match /usuarios/{uid} {
+      allow read: if esAdmin() || (request.auth != null && request.auth.uid == uid);
+      // El primer administrador se crea solo con el correo indicado abajo.
+      allow create: if esAdmin()
+        || (request.auth != null && request.auth.uid == uid
+            && request.auth.token.email == 'aida.m.gonzalezsilva@gmail.com'
+            && request.resource.data.rol == 'admin');
+      allow update, delete: if esAdmin();
+    }
+
+    // Créditos (deudas y pagos a hoteles): solo administradores.
+    match /creditos/{doc} {
+      allow read, write: if esAdmin();
+    }
+
+    // Reservas por año, hoteles, tasas y configuración: usuarios activos.
+    match /{coleccion}/{doc} {
+      allow read, write: if activo() && coleccion != 'usuarios' && coleccion != 'creditos';
+    }
+  }
+}
