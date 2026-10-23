@@ -235,6 +235,12 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .infobox{grid-column:1/-1;background:var(--info-bg);color:var(--info);border-left:4px solid var(--info);border-radius:8px;padding:8px 12px;font-size:13px}
 .infobox ul{margin:6px 0 0;padding-left:18px}.infobox button{margin-top:6px;font-size:12px;padding:4px 10px}
 .extchip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:var(--info-bg);color:var(--info);white-space:nowrap}
+.kgrp{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
+.kgrp .row{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.kgrp .row input[type=text],.kgrp .row .kf{flex:1;min-width:140px}
+.kgrp label.check,.klist label.check{padding:2px 0;font-size:13px;color:var(--fg)}
+.klist{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--surface)}
+.kbar{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.kn{color:var(--muted);font-size:12px;margin-left:4px}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -399,6 +405,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="f"><label for="fRet">Retención</label><select id="fRet"><option value="">Todas</option><option value="pend">Pendiente</option><option value="ok">Lista</option></select></div>
   <label class="check"><input type="checkbox" id="fCruce"> Solo fechas cruzadas</label>
   <button class="ghost" id="clearBtn" type="button">Limpiar</button>
+  <button class="ghost" id="unifBtn" type="button">Unificar contratos</button>
 </div>
 
 <div class="wrap summary" id="summary"></div>
@@ -570,6 +577,19 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f" style="justify-content:end"><button type="button" class="primary" id="tFSave">Guardar tasa</button></div>
     <p class="hint full">Elige una fecha para cargar o corregir su tasa. Las reservas usan la tasa del día en que se registran; si un día no tiene tasa, se usa la del último día cargado.</p>
     <div class="full tablebox"><table id="tTbl"><thead><tr><th>Fecha</th><th class="num">Tasa $</th><th class="num">Tasa €</th></tr></thead><tbody></tbody></table></div>
+  </form>
+</aside>
+<aside class="sheet" id="ksheet" hidden aria-labelledby="kTitle">
+  <header><h2 id="kTitle">Unificar contratos</h2><button class="ghost" id="kClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="kform" onsubmit="return false" style="display:flex;flex-direction:column;gap:12px">
+    <p class="hint">Marca los nombres que son el mismo contrato, escribe el nombre final y pulsa <b>Unir</b>. Se cambian todas las reservas del año seleccionado.</p>
+    <div class="sec">Sugerencias (nombres parecidos)</div>
+    <div id="kSug"></div>
+    <div class="sec">Unir manualmente</div>
+    <input type="search" id="kQ" placeholder="Buscar contrato…">
+    <div id="kAll" class="klist"></div>
+    <div class="kbar"><div class="f" style="flex:1"><label for="kFinal">Nombre final</label><input id="kFinal" placeholder="Ej. PDVSA BARINAS"></div><button type="button" class="primary" id="kGo">Unir seleccionados</button></div>
+    <p class="hint" id="kMsg"></p>
   </form>
 </aside>
 <div class="toast" id="toast" hidden></div>
@@ -993,7 +1013,7 @@ $('#newBtn').onclick=()=>openSheet(null);
 $('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();render()};
 $('#newHotelBtn').onclick=()=>openHotel(null);
 $('#hClose').onclick=closeHotel; $('#hCancel').onclick=closeHotel; $('#hSave').onclick=saveHotel; $('#hform').addEventListener('submit',e=>{e.preventDefault();saveHotel()});
-$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT()};
+$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT();closeK()};
 $('#saveBtn').onclick=save; $('#form').addEventListener('submit',e=>{e.preventDefault();save()});
 $('#delBtn').onclick=()=>{$('#delBtn').hidden=true;$('#delConfirm').hidden=false}; $('#delConfirm').onclick=del;
 $('#exportBtn').onclick=exportXlsx;
@@ -1387,6 +1407,47 @@ async function credPdf(){
   await saveFile(cTab==='estatus'?`ESTATUS CUENTAS POR PAGAR ${cStamp()}.pdf`:`PAGOS A HOTELES ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
 }
 $('#cPdf').onclick=credPdf; $('#cXls').onclick=credXlsx;
+
+/* ---------- unificar contratos ---------- */
+const kNorm=v=>String(v||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[-_./()]/g,' ').replace(/\s+/g,' ').trim();
+function kCounts(){const c={};for(const r of rows){if(r.contrato)c[r.contrato]=(c[r.contrato]||0)+1}return c}
+function kGroups(c){const ns=Object.keys(c), par={}; ns.forEach(n=>par[n]=n); const f=x=>{while(par[x]!==x)x=par[x];return x};
+  for(let i=0;i<ns.length;i++)for(let j=i+1;j<ns.length;j++){const a=kNorm(ns[i]),b=kNorm(ns[j]),ka=a.replace(/ /g,''),kb=b.replace(/ /g,'');const [sh,lo]=ka.length<=kb.length?[ka,kb]:[kb,ka];
+    if(ka===kb||a.split(' ').sort().join(' ')===b.split(' ').sort().join(' ')||(sh.length>=6&&lo.startsWith(sh)))par[f(ns[i])]=f(ns[j])}
+  const g={}; ns.forEach(n=>(g[f(n)]=g[f(n)]||[]).push(n));
+  return Object.values(g).filter(v=>v.length>1).map(v=>v.sort((a,b)=>c[b]-c[a])).sort((a,b)=>b.reduce((s,x)=>s+c[x],0)-a.reduce((s,x)=>s+c[x],0));}
+function kRender(){
+  const c=kCounts(), G=kGroups(c);
+  $('#kSug').innerHTML=G.length?G.map((g,i)=>`<div class="kgrp" data-g="${i}">${g.map(n=>`<label class="check"><input type="checkbox" value="${esc(n)}" checked> ${esc(n)} <span class="kn">${c[n]} reservas</span></label>`).join('')}
+    <div class="row"><div class="f kf"><label>Nombre final</label><input type="text" class="kfin" value="${esc(kNorm(g[0])===g[0]?g[0]:g[0].trim().replace(/\s+/g,' '))}"></div><button type="button" class="primary kgo">Unir</button></div></div>`).join('')
+    :'<p class="hint">No hay nombres parecidos. ¡Los contratos están ordenados!</p>';
+  const q=kNorm($('#kQ').value), sel=new Set([...document.querySelectorAll('#kAll input:checked')].map(x=>x.value));
+  $('#kAll').innerHTML=Object.keys(c).filter(n=>!q||kNorm(n).includes(q)).sort((a,b)=>a.localeCompare(b,'es')).map(n=>`<label class="check"><input type="checkbox" value="${esc(n)}" ${sel.has(n)?'checked':''}> ${esc(n)} <span class="kn">${c[n]}</span></label>`).join('')||'<p class="hint">Sin resultados.</p>';
+}
+let kPending=null;
+async function kUnir(names,final,btn,msgEl){
+  final=String(final||'').trim().toUpperCase().replace(/\s+/g,' ');
+  names=names.filter(n=>n!==final);
+  if(!final){msgEl.textContent='Escribe el nombre final.';return}
+  const L=rows.filter(r=>names.includes(r.contrato));
+  if(!L.length){msgEl.textContent='Marca al menos un nombre distinto al nombre final.';return}
+  const sig=names.join('|')+'>'+final;
+  if(kPending!==sig){kPending=sig;btn.textContent='Confirmar';msgEl.innerHTML=`Se cambiarán <b>${L.length}</b> reservas (${names.map(esc).join(', ')}) a <b>${esc(final)}</b>. Pulsa <b>Confirmar</b>.`;return}
+  kPending=null; btn.disabled=true; msgEl.textContent='Actualizando…';
+  const by={}; for(const r of L)(by[r.slug]=by[r.slug]||{})[r.id]={contrato:final,editado:new Date().toISOString()};
+  try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`${L.length} reservas ahora dicen “${final}”`); msgEl.textContent=''; setTimeout(kRender,400) }
+  catch(e){ msgEl.textContent='No se pudo actualizar. Inténtalo de nuevo.' }
+  finally{ btn.disabled=false; btn.textContent=btn.classList.contains('kgo')?'Unir':'Unir seleccionados' }
+}
+$('#kSug').addEventListener('click',e=>{const b=e.target.closest('.kgo');if(!b)return;const g=b.closest('.kgrp');let m=g.querySelector('.hint');if(!m){m=document.createElement('p');m.className='hint';g.appendChild(m)}
+  kUnir([...g.querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value),g.querySelector('.kfin').value,b,m)});
+$('#kSug').addEventListener('change',()=>{kPending=null;document.querySelectorAll('#kSug .kgo').forEach(b=>b.textContent='Unir')});
+$('#kGo').onclick=()=>kUnir([...document.querySelectorAll('#kAll input:checked')].map(x=>x.value),$('#kFinal').value,$('#kGo'),$('#kMsg'));
+$('#kAll').addEventListener('change',()=>{kPending=null;$('#kGo').textContent='Unir seleccionados';const s=[...document.querySelectorAll('#kAll input:checked')].map(x=>x.value);if(s.length&&!$('#kFinal').value)$('#kFinal').value=s[0]});
+$('#kQ').addEventListener('input',kRender);
+$('#unifBtn').onclick=()=>{if(!canWrite){toast('No tienes permiso para cambiar contratos.');return}kPending=null;$('#kFinal').value='';$('#kMsg').textContent='';kRender();$('#scrim').hidden=false;$('#ksheet').hidden=false};
+function closeK(){$('#ksheet').hidden=true;$('#scrim').hidden=true}
+$('#kClose').onclick=closeK;
 
 /* ---------- horizontal scroll ---------- */
 (()=>{const box=$('#tblBox');const step=()=>Math.max(240,box.clientWidth*0.6);

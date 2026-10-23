@@ -1,5 +1,5 @@
 /* Trabajador de la app: permite instalarla. Siempre busca la versión más nueva en internet. */
-const CACHE = 'hospedaje-ow-v6';
+const CACHE = 'hospedaje-ow-v7';
 self.addEventListener('install', () => { self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
