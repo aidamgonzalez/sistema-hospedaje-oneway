@@ -223,6 +223,9 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .xrow .xrl .xrc{flex:1;min-width:0;width:auto!important}
 .rchip{display:inline-block;margin-top:2px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px}
 .rchip.ok{background:#DDF1E4;color:#1D6B43}.rchip.no{background:#FBE7C2;color:#8A5200}
+.infobox{grid-column:1/-1;background:var(--info-bg);color:var(--info);border-left:4px solid var(--info);border-radius:8px;padding:8px 12px;font-size:13px}
+.infobox ul{margin:6px 0 0;padding-left:18px}.infobox button{margin-top:6px;font-size:12px;padding:4px 10px}
+.extchip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:var(--info-bg);color:var(--info);white-space:nowrap}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -439,6 +442,7 @@ tfoot td{background:var(--sand-soft)!important;color:var(--fg)}
   <header><h2 id="sheetTitle">Nueva reserva</h2><button class="ghost" id="closeBtn" type="button" aria-label="Cerrar">✕</button></header>
   <form id="form" autocomplete="off">
     <div class="warnbox" id="cruceBox" hidden></div>
+    <div class="infobox" id="extBox" hidden></div>
     <div class="warnbox" id="yearBox" hidden></div>
     <div class="f full"><label for="eHotel">Hotel</label><input id="eHotel" list="dlHotel" required placeholder="Escribe o elige un hotel"></div>
     <div class="f"><label for="eContrato">Contrato</label><input id="eContrato" list="dlContrato" placeholder="P1 LAURA, OW, METOR…"></div>
@@ -600,10 +604,11 @@ function rebuild(){
   }
   // overlap detection: same passenger string, overlapping stays
   const by={};
-  for(const r of out){r.cruce=null; r.cruces=null; if(!r.in||!r.out||isNoShow(r)) continue; r._names=paxNames(r.pasajero); for(const n of r._names)(by[n]=by[n]||[]).push(r)}
+  for(const r of out){r.cruce=null; r.cruces=null; r.ext=null; if(!r.in||!r.out||isNoShow(r)) continue; r._names=paxNames(r.pasajero); for(const n of r._names)(by[n]=by[n]||[]).push(r)}
   for(const [n,list] of Object.entries(by)){ if(list.length<2) continue;
     for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i],b=list[j]; if(a===b||!overl(a.in,a.out,b.in,b.out)) continue;
-      (a.cruces=a.cruces||[]).push({r:b,n}); (b.cruces=b.cruces||[]).push({r:a,n}); a.cruce=a.cruce||b; b.cruce=b.cruce||a; } }
+      (a.cruces=a.cruces||[]).push({r:b,n}); (b.cruces=b.cruces||[]).push({r:a,n}); a.cruce=a.cruce||b; b.cruce=b.cruce||a; }
+    for(const a of list) for(const b of list){ if(a!==b&&a.out&&a.out===b.in&&a.out>a.in){ const same=upN(a.hotel)===upN(b.hotel); if(!b.ext||(same&&!b.ext.same)) b.ext={r:a,n,same}; } } }
   gsize={}; for(const r of out) if(r.grupo) gsize[r.grupo]=(gsize[r.grupo]||0)+1;
   for(const r of out) if(r.grupo&&gsize[r.grupo]<2) r.grupo=null;
   const AHr=allHotels(); for(const r of out){
@@ -692,7 +697,7 @@ function render(){
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
     <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
-    <td class="pax">${esc(x.pasajero)}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
+    <td class="pax">${esc(x.pasajero)}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
     <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
     <td>${x.status?`<span class="chip ${chipClass(x.status)}">${esc(x.status)}</span>`:''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
     }
@@ -794,7 +799,7 @@ function openSheet(r,pre){
   if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
   F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||'';
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
-  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; checkCruce(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
@@ -814,6 +819,22 @@ function findCruces(){
     const rn=r._names||paxNames(r.pasajero); for(const n of ns){ if(rn.includes(n)&&overl(a,b,r.in,r.out)){ const k=r.slug+'|'+r.id+'|'+n; if(!seen.has(k)){seen.add(k);res.push({n,r})} } } }
   return res.sort((x,y)=>(x.r.in||'')<(y.r.in||'')?-1:1);
 }
+function findExt(){
+  const ns=paxNames(F.ePax.value), a=F.eIn.value, b=F.eOut.value, h=upN(F.eHotel.value); if(!ns.length||!a||!b) return [];
+  const res=[], seen=new Set();
+  for(const r of rows){ if(editing&&r.id===editing.id&&r.slug===editing.slug) continue; if(isNoShow(r)||!r.in||!r.out) continue;
+    const rn=r._names||paxNames(r.pasajero);
+    for(const n of ns){ if(!rn.includes(n)) continue; let tipo=null;
+      if(r.out===a&&r.out>r.in) tipo='antes'; else if(r.in===b&&b>a) tipo='despues'; if(!tipo) continue;
+      const k=r.slug+r.id+n; if(seen.has(k)) continue; seen.add(k); res.push({n,r,tipo,same:upN(r.hotel)===h}); } }
+  return res.sort((x,y)=>(y.same?1:0)-(x.same?1:0));
+}
+function renderExt(){
+  const L=findExt(), box=$('#extBox'); box.hidden=!L.length; if(!L.length) return;
+  const same=L.filter(c=>c.same), hasObs=/EXTENSI/i.test(F.eObs.value);
+  box.innerHTML=`<b>ℹ ${same.length?'Es una extensión':'Continúa estadía en otro hotel'}</b><ul>${L.slice(0,6).map(c=>`<li><b>${esc(c.n)}</b> ${c.tipo==='antes'?'ya está':'tiene reserva'} en <b>${esc(c.r.hotel)}</b> del ${fd(c.r.in)} al ${fd(c.r.out)}${c.r.contrato?' · '+esc(c.r.contrato):''} → ${c.same?(c.tipo==='antes'?'esta reserva <b>extiende</b> su estadía':'esa reserva es la <b>extensión</b> de esta'):(c.tipo==='antes'?'<b>cambio de hotel</b>: sale de allá y entra aquí':'<b>cambio de hotel</b>: sale de aquí y entra allá')}</li>`).join('')}</ul>${same.length&&!hasObs?'<button type="button" id="extObs">Agregar “EXTENSIÓN” a la observación</button>':''}`;
+  $('#extObs')&&($('#extObs').onclick=()=>{F.eObs.value=(F.eObs.value.trim()?F.eObs.value.trim()+' - ':'')+'EXTENSIÓN';renderExt()});
+}
 function checkCruce(){
   const a=F.eIn.value, box=$('#cruceBox');
   const yb=$('#yearBox'), iy=a?+a.slice(0,4):year; yb.hidden=iy===year; if(iy!==year) yb.textContent=`El check-in es de ${iy}, pero estás guardando en el año ${year}. Si corresponde a ${iy}, cambia de año arriba antes de guardar.`;
@@ -823,7 +844,7 @@ function checkCruce(){
   if(L.length) box.innerHTML=`<b>⚠ Fechas cruzadas:</b> ${L.length===1?'este huésped ya tiene':'estos huéspedes ya tienen'} otra reserva en esas fechas.<ul style="margin:6px 0 0;padding-left:18px">${L.slice(0,8).map(c=>`<li><b>${esc(c.n)}</b> · ${esc(c.r.hotel)} · ${fd(c.r.in)} al ${fd(c.r.out)}${c.r.contrato?' · '+esc(c.r.contrato):''}${c.r.status?' · '+esc(c.r.status):''}</li>`).join('')}${L.length>8?`<li>y ${L.length-8} más…</li>`:''}</ul>`;
 }
 
-F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce); F.ePax.addEventListener('input',()=>{clearTimeout(checkCruce.t);checkCruce.t=setTimeout(checkCruce,350)}); F.eStatus.addEventListener('change',checkCruce);
+F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce); [F.eIn,F.eOut,F.ePax,F.eHotel].forEach(el=>['change','input'].forEach(ev=>el.addEventListener(ev,()=>{clearTimeout(renderExt.t);renderExt.t=setTimeout(renderExt,300)}))); F.ePax.addEventListener('input',()=>{clearTimeout(checkCruce.t);checkCruce.t=setTimeout(checkCruce,350)}); F.eStatus.addEventListener('change',checkCruce);
 function calcBs(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value);if(u>0&&t>0)F.eBs.value=(u*t).toFixed(2)}
 F.eUsd.addEventListener('input',calcBs); F.eBcv.addEventListener('input',()=>{const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(u>0)calcBs();else if(b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)});
 F.eBs.addEventListener('input',()=>{const t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(!(parseFloat(F.eUsd.value)>0)&&b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)});
