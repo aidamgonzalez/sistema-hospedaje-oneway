@@ -4,6 +4,7 @@
   const libOk = !!(window.supabase && window.supabase.createClient);
   const configured = libOk && !!(URL_ && KEY);
   const sb = configured ? window.supabase.createClient(URL_, KEY) : null;
+  window.__sbClient = sb;
   const S = { user: null, perfil: null };
   let resolveReady; const ready = new Promise(r => resolveReady = r);
   const $ = s => document.querySelector(s);
@@ -137,7 +138,7 @@
     const admin = S.perfil.rol === 'admin';
     $('#uName').textContent = (S.perfil.nombre || S.user.email) + ' · ' + (admin ? 'Administrador' : 'Agente');
     $('#uBtn').hidden = !admin;
-    if (!admin) { const t = $('#tab-creditos'); if (t) t.hidden = true; const v = $('#view-creditos'); if (v) v.remove(); }
+    if (!admin) { const t = $('#tab-creditos'); if (t) t.hidden = true; const v = $('#view-creditos'); if (v) { v.innerHTML = ''; v.hidden = true; } }
   }
   document.addEventListener('DOMContentLoaded', () => {
     const bar = document.querySelector('header.top .bar');
@@ -213,4 +214,118 @@
     } catch (err) { $('#usImpTxt').textContent = 'No se pudo importar: ' + (err.message || err); }
     finally { $('#usImpOk').disabled = false; }
   }
+})();
+
+/* ---------- Historial de cambios ---------- */
+(function(){
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fd = s => s && /^\d{4}-\d\d-\d\d/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : s;
+  const n2 = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  const fdt = s => { const d = new Date(s); return d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }); };
+  const LBL = { contrato: 'Contrato', pasajero: 'Pasajero', in: 'Check-in', out: 'Check-out', noches: 'Noches', status: 'Status', obs: 'Observación', usd: 'Monto', bs: 'Monto Bs', bcv: 'Tasa BCV', tarifa: 'Tarifa', factura: 'Factura', presupuesto: 'Presupuesto', grupo: 'Pago compartido', nombre: 'Nombre', estado: 'Estado', categoria: 'Categoría', moneda: 'Moneda', retencion: 'Retención', ret_pct: 'Retención', hotel: 'Hotel', tasa: 'Tasa', estatus: 'Estatus', fecha: 'Fecha', fecha_corte: 'Estatus al', eur: 'Tasa €', ret_hotel: 'Pago al hotel', ret: 'Retención Bs', base: 'Llevado en', retenciones: 'Descontar retenciones', anios: 'Años' };
+  const SKIP = new Set(['editado', 'orden', '_borrado', 'lote']);
+  const fv = (k, v) => v == null || v === '' ? '—' : typeof v === 'number' ? n2.format(v) : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : (k === 'grupo' ? 'sí' : typeof v === 'object' ? JSON.stringify(v).slice(0, 60) : fd(String(v)));
+  function cambios(a) {
+    const L = a.path === 'config/tasas' ? { ...LBL, usd: 'Tasa $', eur: 'Tasa €' } : LBL;
+    if (a.accion === 'eliminar') return '<span class="chip bad">Eliminado</span>';
+    const o = a.antes && typeof a.antes === 'object' ? a.antes : null, n = a.despues && typeof a.despues === 'object' ? a.despues : null;
+    if (!o && !n) return `${esc(fv('', a.antes))} → <b>${esc(fv('', a.despues))}</b>`;
+    if (!o) return Object.keys(n).filter(k => !SKIP.has(k) && n[k] != null && n[k] !== '').slice(0, 6).map(k => `${L[k] || k}: <b>${esc(fv(k, n[k]))}</b>`).join(' · ');
+    const ks = [...new Set([...Object.keys(o), ...Object.keys(n || {})])].filter(k => !SKIP.has(k) && JSON.stringify(o[k] ?? null) !== JSON.stringify((n || {})[k] ?? null));
+    return ks.length ? ks.map(k => `${L[k] || k}: ${esc(fv(k, o[k]))} → <b>${esc(fv(k, (n || {})[k]))}</b>`).join('<br>') : '<span class="mut">Sin cambios visibles</span>';
+  }
+  function que(a, nombres) {
+    const [tipo, key] = (a.clave || ':').split(/:(.*)/s);
+    const d = a.despues && typeof a.despues === 'object' ? a.despues : (a.antes && typeof a.antes === 'object' ? a.antes : {});
+    const hotelName = nombres[a.path] || a.path.split('/').pop().replace(/-/g, ' ').toUpperCase();
+    if (/^hoteles-\d{4}$/.test(a.coleccion)) {
+      if (tipo === 'rows') return `Reserva · <b>${esc(hotelName)}</b><span class="sub">${esc(d.pasajero || '')}${d.in ? ' · ' + fd(d.in) : ''}</span>`;
+      return `Hotel · <b>${esc(hotelName)}</b><span class="sub">${esc(LBL[key] || key)}</span>`;
+    }
+    if (a.path === 'config/tasas') return `Tasa BCV<span class="sub">del ${fd(key)}</span>`;
+    if (a.path === 'config/hoteles') return `Catálogo de hoteles<span class="sub">${esc(d.nombre || key)}</span>`;
+    if (a.path === 'config/general') return 'Años del sistema';
+    if (a.path === 'creditos/deudas') return tipo === 'items' ? `Crédito · <b>${esc(d.hotel || '')}</b>` : `Créditos<span class="sub">${esc(LBL[key] || key)}</span>`;
+    if (a.path === 'creditos/pagos') return `Pago a hotel · <b>${esc(d.hotel || '')}</b><span class="sub">${fd(d.fecha || '')}</span>`;
+    return esc(a.path);
+  }
+  const ACC = { crear: ['ok', 'Creó'], editar: ['info', 'Editó'], eliminar: ['bad', 'Eliminó'], 'eliminar documento': ['bad', 'Eliminó'] };
+  let sb = null, nombres = {}, data = [];
+  async function getSb() { if (sb) return sb; const db = await window.claude.use('db'); sb = window.__sbClient; return sb; }
+  async function loadHotelNames() {
+    const { data: rows } = await sb.from('docs').select('path,data->>nombre').like('coleccion', 'hoteles-%');
+    (rows || []).forEach(r => nombres[r.path] = r.nombre);
+  }
+  async function cargar() {
+    await getSb(); if (!sb) return;
+    $('#hiBody').innerHTML = '<tr><td colspan="5" class="empty">Cargando…</td></tr>';
+    if (!Object.keys(nombres).length) await loadHotelNames();
+    let qy = sb.from('actividad').select('*').order('fecha', { ascending: false }).limit(500);
+    const a = $('#hiDesde').value, b = $('#hiHasta').value, t = $('#hiTipo').value;
+    if (a) qy = qy.gte('fecha', a + 'T00:00:00');
+    if (b) qy = qy.lte('fecha', b + 'T23:59:59');
+    if (t === 'reservas') qy = qy.like('coleccion', 'hoteles-%').like('clave', 'rows:%');
+    if (t === 'tasas') qy = qy.eq('path', 'config/tasas');
+    if (t === 'creditos') qy = qy.eq('coleccion', 'creditos');
+    const { data: rows, error } = await qy;
+    if (error) { $('#hiBody').innerHTML = `<tr><td colspan="5" class="empty">No se pudo cargar el historial: ${esc(error.message)}. ¿Ejecutaste el archivo supabase-historial.sql en Supabase?</td></tr>`; return; }
+    data = t === 'hoteles' ? rows.filter(r => r.path === 'config/hoteles' || (/^hoteles-/.test(r.coleccion || '') && /^campo:/.test(r.clave || ''))) : rows; const us = [...new Set(rows.map(r => r.nombre).filter(Boolean))].sort();
+    const cur = $('#hiUser').value; $('#hiUser').innerHTML = '<option value="">Todos</option>' + us.map(u => `<option ${u === cur ? 'selected' : ''}>${esc(u)}</option>`).join('');
+    pintar();
+  }
+  function pintar() {
+    const u = $('#hiUser').value, q = $('#hiQ').value.trim().toUpperCase();
+    const rows = data.filter(r => (!u || r.nombre === u) && (!q || JSON.stringify([r.despues, r.antes, nombres[r.path], r.path]).toUpperCase().includes(q)));
+    $('#hiCount').textContent = `${rows.length} ${rows.length === 1 ? 'cambio' : 'cambios'}${data.length === 500 ? ' (los 500 más recientes; usa las fechas para ver más atrás)' : ''}`;
+    $('#hiBody').innerHTML = rows.length ? rows.map(r => { const [c, l] = ACC[r.accion] || ['', r.accion];
+      return `<tr><td>${fdt(r.fecha)}</td><td><b>${esc(r.nombre || '—')}</b></td><td><span class="chip ${c}">${l}</span></td><td class="pax">${que(r, nombres)}</td><td class="hichg">${cambios(r)}</td></tr>`; }).join('')
+      : '<tr><td colspan="5" class="empty">No hay cambios con estos filtros.</td></tr>';
+  }
+  function mostrar(on) {
+    ['#view-reservas', '#view-hoteles', '#view-reportes', '#view-creditos', '#filters', '#summary'].forEach(s => { const e = $(s); if (e && on) e.hidden = true; });
+    $('#view-historial').hidden = !on;
+    if (on) { document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.id === 'tab-historial'))); cargar(); }
+  }
+  // historial dentro de la reserva
+  let lastRow = null;
+  document.addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if (tr && !e.target.closest('td.sel')) lastRow = tr.dataset.id; }, true);
+  async function historialReserva() {
+    const box = $('#hiRes'); if (!box) return;
+    const sheet = $('#sheet'); if (sheet.hidden || $('#sheetTitle').textContent !== 'Editar reserva' || !lastRow) { box.hidden = true; return; }
+    await getSb(); if (!sb) return;
+    const [slug, id] = lastRow.split('|'); const path = 'hoteles-' + $('#fYear').value + '/' + slug;
+    box.hidden = false; box.innerHTML = '<div class="sec">Historial de esta reserva</div><p class="hint">Cargando…</p>';
+    const { data: rows, error } = await sb.from('actividad').select('*').eq('path', path).eq('clave', 'rows:' + id).order('fecha', { ascending: false }).limit(30);
+    if (error) { box.innerHTML = '<div class="sec">Historial de esta reserva</div><p class="hint">El historial no está activado todavía.</p>'; return; }
+    box.innerHTML = '<div class="sec">Historial de esta reserva</div>' + (rows.length ? '<ul class="hilist">' + rows.map(r => { const [c, l] = ACC[r.accion] || ['', r.accion];
+      return `<li><span class="chip ${c}">${l}</span> <b>${esc(r.nombre || '—')}</b> <span class="mut">${fdt(r.fecha)}</span><div>${cambios(r)}</div></li>`; }).join('') + '</ul>'
+      : '<p class="hint">Sin cambios registrados desde que se activó el historial.</p>');
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabs = document.querySelector('.tabs');
+    const tb = document.createElement('button'); tb.setAttribute('role', 'tab'); tb.id = 'tab-historial'; tb.setAttribute('aria-selected', 'false'); tb.textContent = 'Historial';
+    tabs.appendChild(tb);
+    tb.addEventListener('click', () => mostrar(true));
+    document.querySelectorAll('.tabs button:not(#tab-historial)').forEach(b => b.addEventListener('click', () => { $('#view-historial').hidden = true; }));
+    const sec = document.createElement('section'); sec.id = 'view-historial'; sec.hidden = true;
+    sec.innerHTML = `<div class="cfg">
+        <div class="f"><label for="hiUser">Usuario</label><select id="hiUser"><option value="">Todos</option></select></div>
+        <div class="f"><label for="hiTipo">Qué</label><select id="hiTipo"><option value="">Todo</option><option value="reservas">Reservas</option><option value="hoteles">Hoteles</option><option value="tasas">Tasas BCV</option><option value="creditos">Créditos</option></select></div>
+        <div class="f"><label for="hiDesde">Desde</label><input type="date" id="hiDesde"></div>
+        <div class="f"><label for="hiHasta">Hasta</label><input type="date" id="hiHasta"></div>
+        <div class="f" style="flex:1 1 200px"><label for="hiQ">Buscar</label><input type="search" id="hiQ" placeholder="Pasajero, hotel…" style="width:100%"></div>
+        <button type="button" id="hiReload">Actualizar</button></div>
+      <p class="hint" id="hiCount"></p>
+      <div class="tablebox"><table><thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Qué</th><th>Cambios</th></tr></thead><tbody id="hiBody"></tbody></table></div>`;
+    document.querySelector('main').appendChild(sec);
+    ['#hiDesde', '#hiHasta', '#hiTipo'].forEach(s => $(s).addEventListener('change', cargar));
+    ['#hiUser', '#hiQ'].forEach(s => $(s).addEventListener('input', pintar));
+    $('#hiReload').onclick = cargar;
+    const st = document.createElement('style');
+    st.textContent = '.hichg{white-space:normal;min-width:260px;font-size:13px;line-height:1.5}#view-historial td{vertical-align:top}.hilist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}.hilist li{background:var(--surface-2);border-radius:8px;padding:8px 10px;font-size:13px}.hilist li div{margin-top:4px}';
+    document.head.appendChild(st);
+    const form = $('#form'); const box = document.createElement('div'); box.id = 'hiRes'; box.className = 'full'; box.hidden = true; box.style.gridColumn = '1/-1'; form.appendChild(box);
+    new MutationObserver(historialReserva).observe($('#sheet'), { attributes: true, attributeFilter: ['hidden'] });
+  });
 })();
