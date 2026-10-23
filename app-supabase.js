@@ -329,3 +329,17 @@
     new MutationObserver(historialReserva).observe($('#sheet'), { attributes: true, attributeFilter: ['hidden'] });
   });
 })();
+
+/* ---------- Instalar como aplicación ---------- */
+(function(){
+  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  let evt = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); evt = e; const b = document.getElementById('instBtn'); if (b) b.hidden = false; });
+  window.addEventListener('appinstalled', () => { const b = document.getElementById('instBtn'); if (b) b.hidden = true; });
+  document.addEventListener('DOMContentLoaded', () => {
+    const box = document.querySelector('.ubox'); if (!box) return;
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'instBtn'; b.textContent = '⬇ Instalar app'; b.hidden = !evt;
+    b.onclick = async () => { if (!evt) return; evt.prompt(); await evt.userChoice; evt = null; b.hidden = true; };
+    box.insertBefore(b, box.firstChild);
+  });
+})();
