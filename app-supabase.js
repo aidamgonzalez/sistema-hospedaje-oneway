@@ -332,7 +332,14 @@
 
 /* ---------- Instalar como aplicación ---------- */
 (function(){
-  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  if ('serviceWorker' in navigator) {
+    if (/[?&]reiniciar/.test(location.search)) {
+      navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister()))).then(() => caches.keys()).then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => location.replace(location.pathname));
+    } else {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
+      let reloaded = false; navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && document.getElementById('loginBox') && !document.getElementById('loginBox').hidden) { reloaded = true; location.reload(); } });
+    }
+  }
   let evt = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); evt = e; const b = document.getElementById('instBtn'); if (b) b.hidden = false; });
   window.addEventListener('appinstalled', () => { const b = document.getElementById('instBtn'); if (b) b.hidden = true; });
