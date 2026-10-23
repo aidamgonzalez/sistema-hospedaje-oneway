@@ -336,6 +336,28 @@ tfoot td{background:var(--sand-soft)!important;color:var(--fg)}
 #loginBox{background:linear-gradient(160deg,var(--hdr) 0 45%,var(--bg) 45%)}
 #loginBox .card{border-top:5px solid var(--gold)}
 #loginBox h1 .a{color:var(--gold)} #loginBox h1 .b{color:var(--hdr)}
+/* Ajustes para celular */
+html,body{max-width:100%;overflow-x:hidden}
+.tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none}
+#loginBox .card{max-width:calc(100vw - 32px)}
+@media (max-width:640px){
+  header.top{position:relative;top:0}
+  header.top .bar{gap:8px;padding-block:10px}
+  header.top .brand h1{display:none}
+  header.top button{padding:7px 10px;font-size:13px}
+  header.top .yr label{display:none}
+  .tasas{order:5;width:100%;justify-content:space-between}
+  .tin input{width:80px}
+  .ubox{flex-wrap:wrap}
+  .summary .kpi{min-width:0;flex:1 1 40%;padding:8px 12px}
+  .summary .kpi b{font-size:17px}
+  .filters .f:not(.search){flex:1 1 45%}
+  .filters .f input,.filters .f select{width:100%}
+  .rexp,.rdate{flex-wrap:wrap}
+  .sheet{width:100%}
+}
 </style>
 
 <header class="top">
