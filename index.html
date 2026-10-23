@@ -400,7 +400,7 @@ tfoot td{background:var(--sand-soft)!important;color:var(--fg)}
         <button type="button" id="rNext" aria-label="Día siguiente">▶</button>
         <button type="button" id="rToday" class="ghost">Hoy</button>
       </div>
-      <div class="rexp"><button type="button" id="rPdf" class="primary">Descargar PDF</button><button type="button" id="rXls">Descargar Excel</button></div>
+      <div class="rexp"><button type="button" id="rTasa" hidden>Colocar tasa de hoy</button><button type="button" id="rPdf" class="primary">Descargar PDF</button><button type="button" id="rXls">Descargar Excel</button></div>
     </div>
     <div class="rhead"><h2 id="rTitle"></h2><p id="rSub" class="hint"></p></div>
     <div class="warnbox" id="rYearWarn" hidden></div>
@@ -1030,6 +1030,8 @@ function reportData(){
 function money(v,m){return v?(m==='EUR'?'€ ':'$ ')+fmt2.format(v):''}
 function renderReport(){
   const cfg=RT[rType], {d,groups,n}=reportData();
+  const sinT=rType!=='salidas'&&d===todayStr()?rows.filter(r=>r.in===d&&num(r.bcv)==null&&(num(r.usd)!=null||(r.facturas||[]).some(e=>num(e.usd)!=null))):[];
+  $('#rTasa').hidden=!sinT.length||!canWrite; $('#rTasa').textContent=`Colocar tasa de hoy (${sinT.length} sin tasa)`;
   $('#rDateLbl').textContent=cfg.lbl;
   document.querySelectorAll('.rtabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.r===rType)));
   $('#rTitle').textContent=cfg.t+(d?' · '+fd(d):'');
@@ -1099,6 +1101,17 @@ async function reportPdf(){
   for(let i=1;i<=pages;i++){doc.setPage(i);doc.text(`Generado el ${fd(todayStr())} · Página ${i} de ${pages}`,W-40,doc.internal.pageSize.getHeight()-20,{align:'right'})}
   await saveFile(rFile('pdf'),doc.output('arraybuffer'));
 }
+$('#rTasa').onclick=async()=>{
+  const d=todayStr(), L=rows.filter(r=>r.in===d&&num(r.bcv)==null&&(num(r.usd)!=null||(r.facturas||[]).some(e=>num(e.usd)!=null)));
+  if(!L.length) return; const by={}; let n=0, sinTasa=0;
+  for(const r of L){ const t=tasaFor(d,r.moneda); if(!t){sinTasa++;continue}
+    const up={bcv:t.v,editado:new Date().toISOString()}; if(num(r.usd)!=null) up.bs=Math.round(r.usd*t.v*100)/100;
+    if((r.facturas||[]).length) up.facturas=r.facturas.map(e=>num(e.bcv)==null&&num(e.usd)!=null?{...e,bcv:t.v,bs:Math.round(e.usd*t.v*100)/100}:e);
+    (by[r.slug]=by[r.slug]||{})[r.id]=up; n++; }
+  if(!n){toast('Primero escribe la tasa BCV de hoy arriba, en “BCV hoy”.');return}
+  try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`Tasa colocada en ${n} ${n===1?'reserva':'reservas'}${sinTasa?` · ${sinTasa} sin tasa en euros`:''}`) }
+  catch(e){ toast('No se pudo colocar la tasa. Inténtalo de nuevo.') }
+};
 $('#rPdf').onclick=reportPdf; $('#rXls').onclick=reportXlsx;
 
 /* ---------- tasas BCV ---------- */
@@ -1148,18 +1161,25 @@ function recalcFromBcv(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.va
 function retHint(){const pc=hotelPct(F.eHotel.value),b=parseFloat(F.eBs.value);const el=$('#retHint');if(!F.eHotel.value.trim()){el.textContent='';return}
   el.innerHTML=pc==null?'Retención de este hotel: sin definir (configúrala en Resumen por hotel → Editar).':(+pc===0?'Este hotel no tiene retención.':`Retención ${pc}% del IVA${b>0?`: Bs ${fmt2.format(retOf(b,pc))} · a pagar al hotel Bs <b>${fmt2.format(b-retOf(b,pc))}</b>`:''}`)}
 function bcvHint(){ retHint();
-  const mon=hotelMon(), r=tasaFor(todayStr(),mon), el=$('#bcvHint');
+  const mon=hotelMon(), el=$('#bcvHint'), din=F.eIn.value, hoy=todayStr();
   $('#lblUsd').textContent=mon==='EUR'?'Monto €':'Monto $';
-  if(!r){el.textContent=`No hay tasa BCV ${mon==='EUR'?'en €':'en $'} cargada. Escríbela arriba, en “BCV hoy”.`;return}
+  if(!din||din>hoy){ el.innerHTML=`La tasa BCV se coloca <b>el día del check-in</b>${din?' ('+fd(din)+')':''}. Déjala en blanco por ahora.`; return }
+  const r=tasaFor(din,mon);
+  if(!r){el.textContent=`No hay tasa BCV ${mon==='EUR'?'en €':'en $'} cargada para el ${fd(din)}. Escríbela arriba, en “BCV hoy”, o a mano aquí.`;return}
   const same=num(parseFloat(F.eBcv.value))===num(r.v);
   el.innerHTML=`Tasa BCV ${mon==='EUR'?'€':'$'} del ${fd(r.fecha)}: <b>${fmt4.format(r.v)}</b>${same?' (aplicada)':` <button type="button" class="ratebtn" id="useRate">Usar esta tasa</button>`}`;
-  $('#useRate')&&($('#useRate').onclick=()=>{F.eBcv.value=r.v;autoBcv=String(r.v);recalcFromBcv();bcvHint()});
+  $('#useRate')&&($('#useRate').onclick=()=>{F.eBcv.value=r.v;autoBcv=String(r.v);recalcFromBcv();bcvHint();xTot&&xTot()});
 }
+
 function autoFillBcv(){
   if(editing) return bcvHint();
-  const cur=F.eBcv.value; if(cur&&cur!==autoBcv) return bcvHint();
+  const cur=F.eBcv.value, isT=F.eIn.value===todayStr();
+  if(cur&&cur!==autoBcv) return bcvHint();
+  if(!isT){ if(cur&&cur===autoBcv){ F.eBcv.value=''; autoBcv=null; if(parseFloat(F.eUsd.value)>0) F.eBs.value=''; } return bcvHint(); }
   const r=tasaFor(todayStr(),hotelMon()); if(r){F.eBcv.value=r.v;autoBcv=String(r.v);recalcFromBcv()} bcvHint();
 }
+F.eIn.addEventListener('change',autoFillBcv);
+
 F.eHotel.addEventListener('input',autoFillBcv); ['input','change'].forEach(ev=>{F.eBs.addEventListener(ev,retHint);F.eUsd.addEventListener(ev,retHint)}); F.eHotel.addEventListener('change',autoFillBcv); F.eBcv.addEventListener('input',bcvHint);
 
 async function setHotelPct(name,pct){
