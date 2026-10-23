@@ -851,7 +851,7 @@ function openSheet(r,pre){
   if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
   F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||'';
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
-  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; bsAuto=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
@@ -897,9 +897,13 @@ function checkCruce(){
 }
 
 F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce); [F.eIn,F.eOut,F.ePax,F.eHotel].forEach(el=>['change','input'].forEach(ev=>el.addEventListener(ev,()=>{clearTimeout(renderExt.t);renderExt.t=setTimeout(renderExt,300)}))); F.ePax.addEventListener('input',()=>{clearTimeout(checkCruce.t);checkCruce.t=setTimeout(checkCruce,350)}); F.eStatus.addEventListener('change',checkCruce);
-function calcBs(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value);if(u>0&&t>0)F.eBs.value=(u*t).toFixed(2)}
-F.eUsd.addEventListener('input',calcBs); F.eBcv.addEventListener('input',()=>{const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(u>0)calcBs();else if(b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)});
-F.eBs.addEventListener('input',()=>{const t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(!(parseFloat(F.eUsd.value)>0)&&b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)});
+/* Regla de montos: el monto en Bs manda; Monto $ = Monto Bs ÷ Tasa. Solo si no hay Bs, se calcula Bs = $ × Tasa. */
+let bsAuto=null;
+function usdDesdeBs(){const t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(b>0&&t>0){F.eUsd.value=(b/t).toFixed(2);return true}return false}
+function calcBs(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),bv=F.eBs.value;if(u>0&&t>0&&(!bv||bv===bsAuto)){F.eBs.value=(u*t).toFixed(2);bsAuto=F.eBs.value}}
+F.eUsd.addEventListener('input',calcBs);
+F.eBcv.addEventListener('input',()=>{const bv=F.eBs.value;if(bv&&bv!==bsAuto)usdDesdeBs();else calcBs()});
+F.eBs.addEventListener('input',()=>{bsAuto=null;usdDesdeBs()});
 
 function xRow(e){e=e||{};const d=document.createElement('div');d.className='xrow';
   d.innerHTML=`<div class="f"><label>Concepto</label><input class="xc" list="dlXc" value="${esc(e.concepto||'')}" placeholder="Comidas"></div>
@@ -911,8 +915,9 @@ function xRow(e){e=e||{};const d=document.createElement('div');d.className='xrow
   <label class="check xrl"><input type="checkbox" class="xr" ${e.ret_ok?'checked':''}> Retención lista <input class="xrc" placeholder="N° comprobante" value="${esc(e.ret_comp||'')}" style="width:auto;flex:1;padding:4px 8px"></label>
   <button type="button" class="xdel" aria-label="Quitar factura">✕</button>`;
   const u=d.querySelector('.xu'),t=d.querySelector('.xt'),b=d.querySelector('.xb');
-  const calc=()=>{const U=parseFloat(u.value),T=parseFloat(t.value);if(U>0&&T>0)b.value=(U*T).toFixed(2);xTot()};
-  u.addEventListener('input',calc);t.addEventListener('input',calc);b.addEventListener('input',()=>{const B=parseFloat(b.value),T=parseFloat(t.value);if(!(parseFloat(u.value)>0)&&B>0&&T>0)u.value=(B/T).toFixed(2);xTot()});
+  let ba=null; const u2=()=>{const B=parseFloat(b.value),T=parseFloat(t.value);if(B>0&&T>0)u.value=(B/T).toFixed(2)};
+  const calc=()=>{const U=parseFloat(u.value),T=parseFloat(t.value);if(U>0&&T>0&&(!b.value||b.value===ba)){b.value=(U*T).toFixed(2);ba=b.value}xTot()};
+  u.addEventListener('input',calc);t.addEventListener('input',()=>{if(b.value&&b.value!==ba){u2();xTot()}else calc()});b.addEventListener('input',()=>{ba=null;u2();xTot()});
   d.querySelector('.xs').addEventListener('change',xTot);
   d.querySelector('.xdel').onclick=()=>{d.remove();xTot()};
   $('#xList').appendChild(d);}
@@ -1075,7 +1080,7 @@ function reportData(){
 function money(v,m){return v?(m==='EUR'?'€ ':'$ ')+fmt2.format(v):''}
 function renderReport(){
   const cfg=RT[rType], {d,groups,n}=reportData();
-  const sinT=rType!=='salidas'&&d===todayStr()?rows.filter(r=>r.in===d&&num(r.bcv)==null&&(num(r.usd)!=null||(r.facturas||[]).some(e=>num(e.usd)!=null))):[];
+  const sinT=rType!=='salidas'&&d===todayStr()?rows.filter(r=>r.in===d&&num(r.bcv)==null&&(num(r.usd)!=null||num(r.bs)!=null||(r.facturas||[]).some(e=>num(e.usd)!=null||num(e.bs)!=null))):[];
   $('#rTasa').hidden=!sinT.length||!canWrite; $('#rTasa').textContent=`Colocar tasa de hoy (${sinT.length} sin tasa)`;
   $('#rDateLbl').textContent=cfg.lbl;
   document.querySelectorAll('.rtabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.r===rType)));
@@ -1147,11 +1152,11 @@ async function reportPdf(){
   await saveFile(rFile('pdf'),doc.output('arraybuffer'));
 }
 $('#rTasa').onclick=async()=>{
-  const d=todayStr(), L=rows.filter(r=>r.in===d&&num(r.bcv)==null&&(num(r.usd)!=null||(r.facturas||[]).some(e=>num(e.usd)!=null)));
+  const d=todayStr(), L=rows.filter(r=>r.in===d&&num(r.bcv)==null&&(num(r.usd)!=null||num(r.bs)!=null||(r.facturas||[]).some(e=>num(e.usd)!=null||num(e.bs)!=null)));
   if(!L.length) return; const by={}; let n=0, sinTasa=0;
   for(const r of L){ const t=tasaFor(d,r.moneda); if(!t){sinTasa++;continue}
-    const up={bcv:t.v,editado:new Date().toISOString()}; if(num(r.usd)!=null) up.bs=Math.round(r.usd*t.v*100)/100;
-    if((r.facturas||[]).length) up.facturas=r.facturas.map(e=>num(e.bcv)==null&&num(e.usd)!=null?{...e,bcv:t.v,bs:Math.round(e.usd*t.v*100)/100}:e);
+    const up={bcv:t.v,editado:new Date().toISOString()}; if(num(r.bs)!=null) up.usd=Math.round(r.bs/t.v*100)/100; else if(num(r.usd)!=null) up.bs=Math.round(r.usd*t.v*100)/100;
+    if((r.facturas||[]).length) up.facturas=r.facturas.map(e=>num(e.bcv)!=null?e:(num(e.bs)!=null?{...e,bcv:t.v,usd:Math.round(e.bs/t.v*100)/100}:(num(e.usd)!=null?{...e,bcv:t.v,bs:Math.round(e.usd*t.v*100)/100}:e)));
     (by[r.slug]=by[r.slug]||{})[r.id]=up; n++; }
   if(!n){toast('Primero escribe la tasa BCV de hoy arriba, en “BCV hoy”.');return}
   try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`Tasa colocada en ${n} ${n===1?'reserva':'reservas'}${sinTasa?` · ${sinTasa} sin tasa en euros`:''}`) }
@@ -1202,7 +1207,7 @@ $('#tFSave').onclick=async()=>{const d=$('#tF').value;if(!d){toast('Elige la fec
 $('#tform').addEventListener('submit',e=>{e.preventDefault();$('#tFSave').click()});
 let autoBcv=null;
 function hotelMon(){return allHotels()[upN(F.eHotel.value)]?.moneda||editing?.moneda||'USD'}
-function recalcFromBcv(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(u>0&&t>0)F.eBs.value=(u*t).toFixed(2);else if(b>0&&t>0)F.eUsd.value=(b/t).toFixed(2)}
+function recalcFromBcv(){const bv=F.eBs.value;if(bv&&bv!==bsAuto)usdDesdeBs();else calcBs()}
 function retHint(){const pc=hotelPct(F.eHotel.value),b=parseFloat(F.eBs.value);const el=$('#retHint');if(!F.eHotel.value.trim()){el.textContent='';return}
   el.innerHTML=pc==null?'Retención de este hotel: sin definir (configúrala en Resumen por hotel → Editar).':(+pc===0?'Este hotel no tiene retención.':`Retención ${pc}% del IVA${b>0?`: Bs ${fmt2.format(retOf(b,pc))} · a pagar al hotel Bs <b>${fmt2.format(b-retOf(b,pc))}</b>`:''}`)}
 function bcvHint(){ retHint();
@@ -1318,9 +1323,10 @@ async function delC(){ try{ await saveDeuItems({items:{[cEdit]:{_borrado:true}}}
 function retCalc(){const on=+$('#pRetP').value>0;$('#pRetH').hidden=!on;$('#pRetR').hidden=!on;$('#pRetHint').hidden=!on;}
 function autoRet(){const pc=+$('#pRetP').value;if(!pc)return;const b=n2($('#pBs').value);if(b==null)return;const r=retOf(b,pc);$('#pRR').value=r.toFixed(2);$('#pRH').value=(b-r).toFixed(2)}
 $('#pRetP').addEventListener('change',()=>{retCalc();autoRet()});
-$('#pUsd').addEventListener('input',()=>{const u=n2($('#pUsd').value),t=n2($('#pTasa').value);if(u!=null&&t)$('#pBs').value=(u*t).toFixed(2);autoRet()});
-$('#pTasa').addEventListener('input',()=>{const u=n2($('#pUsd').value),t=n2($('#pTasa').value),b=n2($('#pBs').value);if(u!=null&&t)$('#pBs').value=(u*t).toFixed(2);else if(b!=null&&t)$('#pUsd').value=(b/t).toFixed(2);autoRet()});
-$('#pBs').addEventListener('input',()=>{const t=n2($('#pTasa').value),b=n2($('#pBs').value);if(b!=null&&t&&!n2($('#pUsd').value))$('#pUsd').value=(b/t).toFixed(2);autoRet()});
+let pBsAuto=null;
+$('#pUsd').addEventListener('input',()=>{const u=n2($('#pUsd').value),t=n2($('#pTasa').value),bv=$('#pBs').value;if(u!=null&&t&&(!bv||bv===pBsAuto)){$('#pBs').value=(u*t).toFixed(2);pBsAuto=$('#pBs').value}autoRet()});
+$('#pTasa').addEventListener('input',()=>{const u=n2($('#pUsd').value),t=n2($('#pTasa').value),b=n2($('#pBs').value),bv=$('#pBs').value;if(b!=null&&t&&bv!==pBsAuto)$('#pUsd').value=(b/t).toFixed(2);else if(u!=null&&t){$('#pBs').value=(u*t).toFixed(2);pBsAuto=$('#pBs').value}autoRet()});
+$('#pBs').addEventListener('input',()=>{pBsAuto=null;const t=n2($('#pTasa').value),b=n2($('#pBs').value);if(b!=null&&t)$('#pUsd').value=(b/t).toFixed(2);autoRet()});
 function updResta(){const h=upN($('#pHotel').value);const d=Object.values(deu.items||{}).find(x=>x&&!x._borrado&&upN(x.hotel)===h);$('#pRestaW').hidden=!!pEdit||!d;if(d){const v=dVals(d);$('#pRestaTxt').textContent=`Restar este pago de la deuda de ${d.hotel} (hoy $ ${fmt2.format(v.usd||0)})`}}
 $('#pFecha').addEventListener('change',()=>{if(!pEdit){const r=tasaFor($('#pFecha').value,allHotels()[upN($('#pHotel').value)]?.moneda);if(r){$('#pTasa').value=r.v;$('#pTasa').dispatchEvent(new Event('input'))}}});
 $('#pHotel').addEventListener('input',()=>{if(!pEdit){const r=tasaFor($('#pFecha').value,allHotels()[upN($('#pHotel').value)]?.moneda);if(r)$('#pTasa').value=r.v}updResta();const h=upN($('#pHotel').value);const d=Object.values(deu.items||{}).find(x=>x&&!x._borrado&&upN(x.hotel)===h);if(!pEdit){const pc=d?(d.ret_pct??hotelPct(d.hotel)):hotelPct($('#pHotel').value);$('#pRetP').value=String(pc??0);retCalc();autoRet()}});
@@ -1329,7 +1335,7 @@ function openP(id){
   $('#pFecha').value=p?(p.fecha||''):todayStr(); $('#pHotel').value=p?.hotel||upN($('#pHotelF').value)||''; $('#pUsd').value=p?.usd??''; $('#pTasa').value=p?.tasa??(tasaFor($('#pFecha').value,allHotels()[upN($('#pHotel').value)]?.moneda)?.v)??deu.tasa??''; $('#pBs').value=p?.bs??'';
   $('#pEst').value=p?.estatus||''; $('#pRetP').value=String(p?.ret_pct??(p?.retenciones?75:(p?0:(hotelPct($('#pHotel').value)??0)))); $('#pRH').value=p?.ret_hotel??''; $('#pRR').value=p?.ret??''; $('#pObs').value=p?.obs||''; $('#pResta').checked=true;
   retCalc(); updResta(); $('#pDel').hidden=!p; $('#pDelOk').hidden=true; $('#pSave').disabled=!canWrite;
-  $('#scrim').hidden=false; $('#psheet').hidden=false; setTimeout(()=>$(p?'#pUsd':'#pHotel').focus(),50);
+  pBsAuto=null; $('#scrim').hidden=false; $('#psheet').hidden=false; setTimeout(()=>$(p?'#pUsd':'#pHotel').focus(),50);
 }
 function closeP(){$('#psheet').hidden=true;$('#scrim').hidden=true;pEdit=null}
 async function saveP(){
