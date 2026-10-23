@@ -3,7 +3,9 @@
   const URL_ = window.SUPABASE_URL || '', KEY = window.SUPABASE_ANON_KEY || '';
   const libOk = !!(window.supabase && window.supabase.createClient);
   const configured = libOk && !!(URL_ && KEY);
-  const sb = configured ? window.supabase.createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'hospedaje-ow-auth', lock: async (name, timeout, fn) => fn() } }) : null;
+  const sb = configured ? window.supabase.createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: /access_token|type=recovery|[?&]code=/.test(location.hash + location.search), storageKey: 'hospedaje-ow-auth', lock: async (name, timeout, fn) => fn() } }) : null;
+  const conTiempo = (pr, ms, paso) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error('TIEMPO:' + paso)), ms))]);
+  const paso = t => { const m = document.getElementById('loginMsg'); if (m) { m.style.color = 'var(--muted)'; m.textContent = t; } };
   window.__sbClient = sb;
   const S = { user: null, perfil: null };
   let resolveReady; const ready = new Promise(r => resolveReady = r);
@@ -94,15 +96,16 @@
     const u = session && session.user; if (!u) { showLogin(); return; }
     if (S.user && S.user.id === u.id) return;
     try {
-      let { data: p, error } = await sb.from('perfiles').select('*').eq('id', u.id).maybeSingle();
+      paso('Cargando tu perfil…');
+      let { data: p, error } = await conTiempo(sb.from('perfiles').select('*').eq('id', u.id).maybeSingle(), 15000, 'perfil');
       if (error) throw error;
       if (!p && u.email && u.email.toLowerCase() === String(window.ADMIN_EMAIL || '').toLowerCase()) {
         const r = await sb.from('perfiles').insert({ id: u.id, nombre: u.email.split('@')[0], email: u.email, rol: 'admin', activo: true }).select().single();
         if (r.error) throw r.error; p = r.data;
       }
       if (!p || !p.activo) { await sb.auth.signOut(); showLogin('Tu usuario no tiene acceso. Pide al administrador que te habilite.'); return; }
-      S.user = u; S.perfil = p; hideLogin(); applyRole(); resolveReady();
-    } catch (err) { showLogin('No se pudo cargar tu perfil: ' + (err.message || err)); }
+      S.user = u; S.perfil = p; $('#loginMsg').style.color = ''; $('#loginMsg').textContent = ''; hideLogin(); applyRole(); resolveReady();
+    } catch (err) { $('#loginMsg').style.color = ''; showLogin(/TIEMPO:perfil/.test(err.message) ? 'La conexión con la base de datos tardó demasiado al cargar tu perfil (paso 2). Revisa tu internet y vuelve a intentar.' : 'No se pudo cargar tu perfil: ' + (err.message || err)); }
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -111,11 +114,13 @@
       e.preventDefault(); $('#lBtn').disabled = true; $('#lBtn').textContent = 'Entrando…'; $('#loginMsg').textContent = '';
       const email = $('#lEmail').value.trim().toLowerCase().replace(/\s+/g, '');
       try {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password: $('#lPass').value });
+        paso('Verificando contraseña…');
+        const { data, error } = await conTiempo(sb.auth.signInWithPassword({ email, password: $('#lPass').value }), 15000, 'clave');
+        $('#loginMsg').style.color = '';
         if (error) {
           $('#loginMsg').textContent = /invalid login|invalid_credentials|invalid credentials/i.test(error.message) ? 'Correo o contraseña incorrectos. Revisa que no haya espacios ni mayúsculas de más.' : (/confirm/i.test(error.message) ? 'Tu correo aún no está confirmado.' : 'No se pudo iniciar sesión: ' + error.message);
         } else if (data && data.session) { await entrar(data.session); }
-      } catch (err) { $('#loginMsg').textContent = 'No se pudo conectar: ' + (err && err.message || err) + '. Revisa tu internet e inténtalo de nuevo.'; }
+      } catch (err) { $('#loginMsg').style.color = ''; $('#loginMsg').textContent = /TIEMPO:clave/.test(err && err.message) ? 'El servidor no respondió al verificar la contraseña (paso 1). Revisa tu internet y vuelve a intentar.' : 'No se pudo conectar: ' + (err && err.message || err) + '. Revisa tu internet e inténtalo de nuevo.'; }
       finally { $('#lBtn').disabled = false; $('#lBtn').textContent = 'Entrar'; }
     });
     $('#lForgot').addEventListener('click', async () => {
