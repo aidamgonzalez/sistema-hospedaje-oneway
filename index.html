@@ -488,14 +488,15 @@ html,body{max-width:100%;overflow-x:hidden}
     <p class="hint" id="ccInfo">Carga el <b>respaldo (.json)</b> o el <b>Excel del mes</b> descargado del sistema de facturación. El cruce se hace noche por noche, por huésped y hotel.</p>
     <div class="summary" id="ccSum"></div>
     <div class="rtabs" id="ccTabs" style="margin-block:10px">
-      <button type="button" data-cc="prob" aria-selected="true">Con diferencias</button>
-      <button type="button" data-cc="nofact" aria-selected="false">No facturado</button>
+      <button type="button" data-cc="prob" aria-selected="true">Por revisar</button>
+      <button type="button" data-cc="nofact" aria-selected="false">No facturadas</button>
+      <button type="button" data-cc="dif" aria-selected="false">Facturadas distinto</button>
       <button type="button" data-cc="sinres" aria-selected="false">Facturado sin reserva</button>
-      <button type="button" data-cc="dif" aria-selected="false">Noches u hotel distintos</button>
+      <button type="button" data-cc="sinfecha" aria-selected="false">Facturación sin fechas</button>
       <button type="button" data-cc="ok" aria-selected="false">Coinciden</button>
-      <button type="button" data-cc="todos" aria-selected="false">Todos</button>
+      <button type="button" data-cc="todos" aria-selected="false">Todas</button>
     </div>
-    <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>En hospedaje</th><th>En facturación</th><th class="num">Noches hosp.</th><th class="num">Noches fact.</th><th>Detalle</th></tr></thead><tbody></tbody></table></div>
+    <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>Reserva en hospedaje</th><th>Lo que está facturado</th><th>Qué revisar</th></tr></thead><tbody></tbody></table></div>
   </section>
   <section id="view-hoteles" hidden>
     <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
@@ -1573,48 +1574,63 @@ function ccParseXLSX(buf){
     if(ccUp(g('B18'))!=='ITEM'||ccUp(g('C18'))!=='CLIENTE')continue;
     for(let r=19;r<2000;r++){const it=g('B'+r);if(it==null||it===''){if(ccUp(g('B'+r))==='TOTAL'||!g('C'+r))break;continue}if(ccUp(it)==='TOTAL')break;
       const desc=ccUp(g('E'+r));const mi=desc.match(/IN:\s*(\d{1,2})\s+([A-Z]{3})/),mo=desc.match(/OUT:\s*(\d{1,2})\s+([A-Z]{3})/);
-      out.push({nombre:g('C'+r),hotel:g('D'+r),cin:mi?iso(mi[1],mi[2]):'',cout:mo?iso(mo[1],mo[2]):'',ns:/\bNO\s*-?\s*SHOW\b/.test(desc),ref:n,periodo:`${Y}-${String(M).padStart(2,'0')}`})}}
+      out.push({fila:r,nombre:g('C'+r),hotel:g('D'+r),cin:mi?iso(mi[1],mi[2]):'',cout:mo?iso(mo[1],mo[2]):'',ns:/\bNO\s*-?\s*SHOW\b/.test(desc),ref:n,periodo:`${Y}-${String(M).padStart(2,'0')}`})}}
   return {recs:out,mes:`${Y}-${String(M).padStart(2,'0')}`};
 }
 function ccRange(dates){const L=[...dates].sort();const out=[];let a=null,b=null;for(const d of L){if(a&&ccAdd(b,1)===d){b=d}else{if(a)out.push([a,b]);a=b=d}}if(a)out.push([a,b]);return out}
-function ccFmtR(map){ // map date->[{hotel,ref}] -> lines grouped by hotel
-  const byH={};for(const [d,arr] of map){for(const x of arr){const k=ccUp(x.hotel)+'|'+(x.ref||'');(byH[k]=byH[k]||{h:x.hotel,ref:x.ref,ds:new Set()}).ds.add(d)}}
-  return Object.values(byH).map(o=>{const rs=ccRange(o.ds);return `<div><b>${esc(o.h||'')}</b>${o.ref?` <span class="mut">${esc(o.ref)}</span>`:''}</div>`+rs.map(([a,b])=>`<div>${fd(a).slice(0,5)}${a!==b?'–'+fd(b).slice(0,5):''} · ${Math.round((new Date(b)-new Date(a))/864e5)+1} n.</div>`).join('')}).join('')}
+const ccN=(a,b,ns)=>ns?1:Math.max(1,Math.round((new Date((b||ccAdd(a,1))+'T12:00:00Z')-new Date(a+'T12:00:00Z'))/864e5));
+const ccTxt=(a,b,ns)=>a?`${fd(a).slice(0,5)} al ${fd(b||ccAdd(a,1)).slice(0,5)} · ${ccN(a,b,ns)} noche${ccN(a,b,ns)>1?'s':''}${ns?' (NO SHOW)':''}`:'sin fechas';
+const ccNames=n=>{let L=ccSplit(n);if(!L.length)L=[ccUp(n)];return L.map(x=>new Set(ccToks(x))).filter(t=>t.size)};
+function ccNameMatch(A,B){for(const a of A)for(const b of B){const I=[...a].filter(t=>b.has(t)).length;if(I>=2&&(I===a.size||I===b.size))return true;if(a.size===1&&b.size===1&&I===1)return true}return false}
 function ccCompute(){
   const mes=$('#ccMes').value; if(!mes||!ccFact) return null;
   const conts=new Set($('#ccCont').value.split(',').map(ccUp).filter(Boolean));
-  const P=[]; const keyIdx=new Map();
-  const find=(name,create)=>{const T=ccToks(name),k=[...T].sort().join(' ');if(keyIdx.has(k))return keyIdx.get(k);
-    let best=null,bs=0;for(const p of P){const I=T.filter(t=>p.t.has(t)).length;if(I>=2&&(I===T.length||I===p.t.size)&&I>bs){best=p;bs=I}}
-    if(best)return best; if(!create)return null; const p={name,t:new Set(T),h:new Map(),f:new Map(),rows:[]};P.push(p);keyIdx.set(k,p);return p};
-  const add=(p,side,d,x)=>{const m=p[side];if(!m.has(d))m.set(d,[]);m.get(d).push(x)};
-  for(const r of rows){if(!conts.has(ccUp(r.contrato)))continue;if((r.mesfact||String(r.in||'').slice(0,7))!==mes)continue;const ns=isNoShow(r);const ds=ccNights(r.in,r.out,ns,'');if(!ds.length)continue;
-    let names=ccSplit(r.pasajero);if(!names.length)names=[ccUp(r.pasajero)];
-    for(const n of names){const p=find(n,true);p.rows.push(r);ds.forEach(d=>add(p,'h',d,{hotel:r.hotel,ref:r.contrato+(r.mesfact&&r.mesfact!==String(r.in||'').slice(0,7)?' · fact. '+ccMESA[+r.mesfact.slice(5)-1]:'')}))}}
-  for(const x of ccFact){if(x.periodo&&x.periodo!==mes)continue;const ds=ccNights(x.cin,x.cout,x.ns,'');if(!ds.length)continue;let names=ccSplit(x.nombre);if(!names.length)names=[ccUp(x.nombre)];
-    for(const n of names){const p=find(n,true);ds.forEach(d=>add(p,'f',d,{hotel:x.hotel,ref:x.ref}))}}
-  return P.map(p=>{const D=new Set([...p.h.keys(),...p.f.keys()]);let both=0,soloH=0,soloF=0,hotelDif=0,dobleF=0,dobleH=0;
-    for(const d of D){const h=p.h.get(d),f=p.f.get(d);if(h&&f){both++;if(!h.some(a=>f.some(b=>ccSameHotel(a.hotel,b.hotel))))hotelDif++}else if(h)soloH++;else soloF++;if(f&&f.length>1)dobleF++;if(h&&h.length>1)dobleH++}
-    let est;if(!p.f.size)est='nofact';else if(!p.h.size)est='sinres';else if(!soloH&&!soloF&&!hotelDif&&!dobleF)est='ok';else est='dif';
-    const det=[];if(soloH&&p.f.size)det.push(`${soloH} noche(s) sin facturar`);if(soloF&&p.h.size)det.push(`${soloF} noche(s) facturadas sin reserva`);if(hotelDif)det.push(`hotel distinto en ${hotelDif} noche(s)`);if(dobleF)det.push(`${dobleF} noche(s) facturadas dos veces`);if(dobleH)det.push(`${dobleH} noche(s) repetidas en hospedaje`);
-    if(est==='nofact')det.push('Está en hospedaje pero no en facturación');if(est==='sinres')det.push('Está facturado pero no hay reserva en hospedaje con esos contratos');
-    return {p,est,nh:p.h.size,nf:p.f.size,soloH,soloF,det:det.join(' · '),row:p.rows[0]}}).sort((a,b)=>({nofact:0,sinres:1,dif:2,ok:3}[a.est]-{nofact:0,sinres:1,dif:2,ok:3}[b.est])||a.p.name.localeCompare(b.p.name,'es'));
+  const H=rows.filter(r=>conts.has(ccUp(r.contrato))&&(r.mesfact||String(r.in||'').slice(0,7))===mes&&r.in).map(r=>{const ns=isNoShow(r);return {r,ns,names:ccNames(r.pasajero),n:new Set(ccNights(r.in,r.out,ns,''))}});
+  const F=ccFact.filter(x=>!x.periodo||x.periodo===mes).map(x=>({x,names:ccNames(x.nombre),n:new Set(x.cin?ccNights(x.cin,x.cout,x.ns,''):[]),used:false}));
+  const fTxt=f=>`<div><b>${esc(f.x.hotel||'')}</b> <span class="mut">${esc(f.x.ref||'')}${f.x.fila?' · fila '+f.x.fila:''}</span></div><div>${esc(f.x.nombre)} · ${ccTxt(f.x.cin,f.x.cout,f.x.ns)}</div>`;
+  const hTxt=h=>`<div><b>${esc(h.r.hotel)}</b> <span class="mut">${esc(h.r.contrato||'')}</span></div><div>${ccTxt(h.r.in,h.r.out,h.ns)}</div>`;
+  const res=[];
+  for(const h of H){
+    const M=F.filter(f=>f.n.size&&ccNameMatch(h.names,f.names)&&[...f.n].some(d=>h.n.has(d)));
+    M.forEach(f=>f.used=true);
+    if(!M.length){const otras=F.filter(f=>ccNameMatch(h.names,f.names));
+      res.push({est:'nofact',name:h.r.pasajero,h,M:[],hh:hTxt(h),ff:'',det:otras.length?'Está facturado a su nombre '+otras.map(f=>f.n.size?'con otras fechas ('+ccTxt(f.x.cin,f.x.cout,f.x.ns)+')':'pero sin fechas'+(f.x.fila?' (fila '+f.x.fila+')':'')).join(', '):'Esta reserva no aparece en la facturación del mes',row:h.r});continue}
+    const allH=new Set(H.filter(o=>ccNameMatch(o.names,h.names)).flatMap(o=>[...o.n]));
+    const fn=new Set(M.flatMap(f=>[...f.n]));
+    const falt=[...h.n].filter(d=>!fn.has(d)).length, sobr=[...fn].filter(d=>!allH.has(d)).length;
+    const det=[];
+    if(falt) det.push(`Faltan ${falt} noche${falt>1?'s':''} por facturar`);
+    if(sobr) det.push(`Se facturó ${sobr} noche${sobr>1?'s':''} de más`);
+    if(!M.every(f=>ccSameHotel(h.r.hotel,f.x.hotel))) det.push('El hotel es distinto');
+    if(h.names.length===1&&M.length>1&&M.reduce((s,f)=>s+[...f.n].filter(d=>h.n.has(d)).length,0)>[...h.n].filter(d=>fn.has(d)).length) det.push('Está facturado dos veces');
+    res.push({est:det.length?'dif':'ok',name:h.r.pasajero,h,M,hh:hTxt(h),ff:M.map(fTxt).join(''),det:det.join(' · '),row:h.r});
+  }
+  for(const f of F) if(!f.used){
+    if(!f.n.size){const o=H.filter(h=>ccNameMatch(h.names,f.names));res.push({est:'sinfecha',name:f.x.nombre,M:[f],hh:o.map(hTxt).join(''),ff:fTxt(f),det:'Este registro de facturación no tiene fecha de entrada y salida; colócalas en el sistema de facturación',row:o[0]?.r});continue}
+    const otras=H.filter(h=>ccNameMatch(h.names,f.names));
+    res.push({est:'sinres',name:f.x.nombre,M:[f],hh:'',ff:fTxt(f),det:otras.length?'En hospedaje tiene otras fechas: '+otras.map(h=>h.r.hotel+' '+ccTxt(h.r.in,h.r.out,h.ns)).join(', '):'No hay reserva con este nombre en los contratos PDVSA de este mes',row:otras[0]?.r});
+  }
+  const O={nofact:0,dif:1,sinres:2,sinfecha:3,ok:4};
+  return res.sort((a,b)=>O[a.est]-O[b.est]||String(a.name).localeCompare(String(b.name),'es'));
 }
-const CC_EST={ok:['ok','Coincide'],nofact:['warn','No facturado'],sinres:['bad','Facturado sin reserva'],dif:['info','Diferencia']};
+const CC_EST={ok:['ok','Coincide'],nofact:['warn','No facturada'],dif:['info','Facturada distinto'],sinres:['bad','Facturado sin reserva'],sinfecha:['bad','Sin fechas']};
 function renderConc(){
   if(!$('#ccMes').value){const d=new Date();$('#ccMes').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
   if(!$('#ccCont').value){let v=null;try{v=localStorage.getItem('cc-contratos')}catch(e){}$('#ccCont').value=v||CC_DEF}
   document.querySelectorAll('#ccTabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.cc===ccTab)));
   const mes=$('#ccMes').value, my=+mes.slice(0,4);
-  if(!ccFact){$('#ccSum').innerHTML='';$('#ccTbl tbody').innerHTML='<tr><td colspan="7" class="empty"><h2>Carga el archivo de facturación</h2><p>Arriba, en “Archivo del sistema de facturación”, elige el respaldo (.json) o el Excel del mes.</p></td></tr>';return}
+  if(!ccFact){$('#ccSum').innerHTML='';$('#ccTbl tbody').innerHTML='<tr><td colspan="5" class="empty"><h2>Carga el archivo de facturación</h2><p>Arriba, en “Archivo del sistema de facturación”, elige el respaldo (.json) o el Excel del mes.</p></td></tr>';return}
   if(my!==year){$('#ccInfo').innerHTML=`El mes es de ${my} y estás viendo el año ${year}. Cambia el año arriba para comparar con las reservas de ${my}.`}
-  else $('#ccInfo').innerHTML=`Archivo: <b>${esc(ccFile)}</b> · ${ccFact.length} registros de facturación. Se comparan las reservas asociadas a este mes de facturación (si una reserva no tiene mes asignado, cuenta el mes de entrada) contra lo facturado en ese período. Los NO SHOW cuentan 1 noche.`;
+  else $('#ccInfo').innerHTML=`Archivo: <b>${esc(ccFile)}</b> (${ccFact.length} registros). <b>Cada fila es una reserva</b> de hospedaje PDVSA del mes, puesta al lado de lo que está facturado a ese huésped en esas fechas. Las reservas cuentan en el mes de facturación que les asignes (o, si no tienen, en el mes de entrada).`;
   ccRes=ccCompute()||[];
-  const c=k=>ccRes.filter(r=>r.est===k).length, nh=ccRes.reduce((s,r)=>s+r.nh,0), nf=ccRes.reduce((s,r)=>s+r.nf,0), sh=ccRes.reduce((s,r)=>s+r.soloH,0), sf=ccRes.reduce((s,r)=>s+r.soloF,0);
-  $('#ccSum').innerHTML=[[fmt0.format(nh),'Noches en hospedaje'],[fmt0.format(nf),'Noches facturadas'],[fmt0.format(sh),'Noches sin facturar'],[fmt0.format(sf),'Noches facturadas sin reserva'],[c('ok'),'Huéspedes que coinciden'],[c('nofact')+c('sinres')+c('dif'),'Huéspedes con diferencias']].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  const c=k=>ccRes.filter(r=>r.est===k).length, nr=ccRes.filter(r=>r.h).length;
+  const K=[[nr,'Reservas PDVSA del mes',''],[c('ok'),'Coinciden','ok'],[c('nofact'),'No facturadas','nofact'],[c('dif'),'Facturadas distinto','dif'],[c('sinres'),'Facturado sin reserva','sinres']];
+  if(c('sinfecha')) K.push([c('sinfecha'),'Facturación sin fechas','sinfecha']);
+  $('#ccSum').innerHTML=K.map(([v,l,t])=>`<div class="kpi" ${t?`data-cc="${t}" style="cursor:pointer"`:''}><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#ccSum').querySelectorAll('[data-cc]').forEach(k=>k.onclick=()=>{ccTab=k.dataset.cc;renderConc()});
   const L=ccRes.filter(r=>ccTab==='todos'||(ccTab==='prob'?r.est!=='ok':r.est===ccTab));
-  $('#ccTbl tbody').innerHTML=L.length?L.map((r,i)=>{const [cl,lb]=CC_EST[r.est];return `<tr ${r.row?`data-id="${esc(r.row.slug+'|'+r.row.id)}"`:''}><td><span class="chip ${cl}">${lb}</span></td><td class="pax"><b>${esc(r.p.name)}</b></td><td class="rg">${ccFmtR(r.p.h)||'<span class="mut">—</span>'}</td><td class="rg">${ccFmtR(r.p.f)||'<span class="mut">—</span>'}</td><td class="num">${r.nh}</td><td class="num">${r.nf}</td><td class="det">${esc(r.det)}</td></tr>`}).join('')
-    :'<tr><td colspan="7" class="empty">No hay huéspedes en esta categoría. 🎉</td></tr>';
+  $('#ccTbl tbody').innerHTML=L.length?L.map(r=>{const [cl,lb]=CC_EST[r.est];return `<tr ${r.row?`data-id="${esc(r.row.slug+'|'+r.row.id)}" style="cursor:pointer"`:''}><td><span class="chip ${cl}">${lb}</span></td><td class="pax"><b>${esc(r.name)}</b></td><td class="rg">${r.hh||'<span class="mut">— no hay reserva —</span>'}</td><td class="rg">${r.ff||'<span class="mut">— no está facturado —</span>'}</td><td class="det">${esc(r.det)||'<span class="mut">Todo bien</span>'}</td></tr>`}).join('')
+    :'<tr><td colspan="5" class="empty">No hay nada en esta categoría. 🎉</td></tr>';
 }
 $('#ccFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;
   try{ if(/\.json$/i.test(f.name)||f.type.includes('json')){ccFact=ccParseJSON(JSON.parse(await f.text()))}
@@ -1626,10 +1642,9 @@ $('#ccCont').addEventListener('change',()=>{try{localStorage.setItem('cc-contrat
 document.querySelectorAll('#ccTabs button').forEach(b=>b.onclick=()=>{ccTab=b.dataset.cc;renderConc()});
 $('#ccTbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const [sl,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===sl&&x.id===id);if(r)openSheet(r)});
 $('#ccXls').onclick=async()=>{ if(!ccRes.length){toast('Primero carga el archivo de facturación.');return} if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel.');return}
-  const txt=m=>{const byH={};for(const [d,arr] of m)for(const x of arr){const k=ccUp(x.hotel)+' '+(x.ref?'('+x.ref+')':'');(byH[k]=byH[k]||new Set()).add(d)}return Object.entries(byH).map(([h,ds])=>h+': '+ccRange(ds).map(([a,b])=>fd(a)+(a!==b?'-'+fd(b):'')).join(', ')).join(' | ')};
-  const aoa=[['CONCILIACION HOSPEDAJE vs FACTURACION PDVSA — '+$('#ccMes').value],['Contratos: '+$('#ccCont').value+' · Archivo: '+ccFile],[],['ESTADO','HUESPED','EN HOSPEDAJE','EN FACTURACION','NOCHES HOSPEDAJE','NOCHES FACTURADAS','SIN FACTURAR','FACTURADAS SIN RESERVA','DETALLE']];
-  for(const r of ccRes)aoa.push([CC_EST[r.est][1],r.p.name,txt(r.p.h),txt(r.p.f),r.nh,r.nf,r.soloH,r.soloF,r.det]);
-  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:20},{wch:32},{wch:50},{wch:50},{wch:10},{wch:10},{wch:10},{wch:12},{wch:50}];
+  const aoa=[['CONCILIACION HOSPEDAJE vs FACTURACION PDVSA — '+$('#ccMes').value],['Contratos: '+$('#ccCont').value+' · Archivo: '+ccFile],[],['ESTADO','HUESPED','HOTEL (HOSPEDAJE)','CONTRATO','FECHAS (HOSPEDAJE)','HOTEL (FACTURADO)','FECHAS (FACTURADO)','QUE REVISAR']];
+  for(const r of ccRes){const h=r.h;aoa.push([CC_EST[r.est][1],r.name,h?h.r.hotel:'',h?h.r.contrato||'':'',h?ccTxt(h.r.in,h.r.out,h.ns):'',r.M.map(f=>f.x.hotel).join(' | '),r.M.map(f=>ccTxt(f.x.cin,f.x.cout,f.x.ns)).join(' | '),r.det||'OK'])}
+  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:20},{wch:34},{wch:24},{wch:14},{wch:26},{wch:28},{wch:26},{wch:50}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'CONCILIACION');
   await saveFile(`CONCILIACION PDVSA ${$('#ccMes').value}.xlsx`,XLSX.write(wb,{bookType:'xlsx',type:'array'}));
 };
