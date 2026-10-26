@@ -530,6 +530,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f"><label for="eTarifa">Tarifa</label><input id="eTarifa" type="number" step="0.01" min="0"></div>
     <div class="f"><label for="eFactura">Factura</label><input id="eFactura"></div>
     <div class="f"><label for="ePresu">Presupuesto</label><input id="ePresu"></div>
+    <div class="f"><label for="eMesFact">Mes de facturación</label><input id="eMesFact" type="month" placeholder="AAAA-MM"><span class="hint" id="eMesFactH">Vacío = mes de entrada</span></div>
     <div class="retbox full" id="retBox"><label class="check"><input type="checkbox" id="eRetOk"> <b>Retención lista</b> de esta factura</label><div class="f"><label for="eRetComp">N° comprobante de retención</label><input id="eRetComp" placeholder="Opcional"></div></div>
     <div class="sec">Facturas adicionales <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">comidas, consumos, lavandería…</span></div>
     <div class="full" id="xList"></div>
@@ -877,7 +878,7 @@ function openSheet(r,pre){
   F.eHotel.value=r?r.hotel:(allHotels()[upN($('#fHotel').value)]?.nombre||''); F.eContrato.value=r?.contrato||$('#fContrato').value||''; F.eStatus.value=r?(r.status||''):'POR PAGAR';
   F.ePax.value=r?.pasajero||''; F.eIn.value=r?.in||''; F.eOut.value=r?.out||''; F.eNoches.value=r?.noches??'';
   if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
-  F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||'';
+  F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||'';
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
   $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; bsAuto=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot();
@@ -963,7 +964,7 @@ function collect(){
   const r={contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
   for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
   for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
-  const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null;
+  const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null; r.mesfact=$('#eMesFact').value||null;
   return r;
 }
 async function save(){
@@ -1537,10 +1538,10 @@ function ccCompute(){
     let best=null,bs=0;for(const p of P){const I=T.filter(t=>p.t.has(t)).length;if(I>=2&&(I===T.length||I===p.t.size)&&I>bs){best=p;bs=I}}
     if(best)return best; if(!create)return null; const p={name,t:new Set(T),h:new Map(),f:new Map(),rows:[]};P.push(p);keyIdx.set(k,p);return p};
   const add=(p,side,d,x)=>{const m=p[side];if(!m.has(d))m.set(d,[]);m.get(d).push(x)};
-  for(const r of rows){if(!conts.has(ccUp(r.contrato)))continue;const ns=isNoShow(r);const ds=ccNights(r.in,r.out,ns,mes);if(!ds.length)continue;
+  for(const r of rows){if(!conts.has(ccUp(r.contrato)))continue;if((r.mesfact||String(r.in||'').slice(0,7))!==mes)continue;const ns=isNoShow(r);const ds=ccNights(r.in,r.out,ns,'');if(!ds.length)continue;
     let names=ccSplit(r.pasajero);if(!names.length)names=[ccUp(r.pasajero)];
-    for(const n of names){const p=find(n,true);p.rows.push(r);ds.forEach(d=>add(p,'h',d,{hotel:r.hotel,ref:r.contrato}))}}
-  for(const x of ccFact){const ds=ccNights(x.cin,x.cout,x.ns,mes);if(!ds.length)continue;let names=ccSplit(x.nombre);if(!names.length)names=[ccUp(x.nombre)];
+    for(const n of names){const p=find(n,true);p.rows.push(r);ds.forEach(d=>add(p,'h',d,{hotel:r.hotel,ref:r.contrato+(r.mesfact&&r.mesfact!==String(r.in||'').slice(0,7)?' · fact. '+ccMESA[+r.mesfact.slice(5)-1]:'')}))}}
+  for(const x of ccFact){if(x.periodo&&x.periodo!==mes)continue;const ds=ccNights(x.cin,x.cout,x.ns,'');if(!ds.length)continue;let names=ccSplit(x.nombre);if(!names.length)names=[ccUp(x.nombre)];
     for(const n of names){const p=find(n,true);ds.forEach(d=>add(p,'f',d,{hotel:x.hotel,ref:x.ref}))}}
   return P.map(p=>{const D=new Set([...p.h.keys(),...p.f.keys()]);let both=0,soloH=0,soloF=0,hotelDif=0,dobleF=0,dobleH=0;
     for(const d of D){const h=p.h.get(d),f=p.f.get(d);if(h&&f){both++;if(!h.some(a=>f.some(b=>ccSameHotel(a.hotel,b.hotel))))hotelDif++}else if(h)soloH++;else soloF++;if(f&&f.length>1)dobleF++;if(h&&h.length>1)dobleH++}
@@ -1557,7 +1558,7 @@ function renderConc(){
   const mes=$('#ccMes').value, my=+mes.slice(0,4);
   if(!ccFact){$('#ccSum').innerHTML='';$('#ccTbl tbody').innerHTML='<tr><td colspan="7" class="empty"><h2>Carga el archivo de facturación</h2><p>Arriba, en “Archivo del sistema de facturación”, elige el respaldo (.json) o el Excel del mes.</p></td></tr>';return}
   if(my!==year){$('#ccInfo').innerHTML=`El mes es de ${my} y estás viendo el año ${year}. Cambia el año arriba para comparar con las reservas de ${my}.`}
-  else $('#ccInfo').innerHTML=`Archivo: <b>${esc(ccFile)}</b> · ${ccFact.length} registros de facturación. El cruce es noche por noche, por huésped y hotel. Los NO SHOW cuentan 1 noche.`;
+  else $('#ccInfo').innerHTML=`Archivo: <b>${esc(ccFile)}</b> · ${ccFact.length} registros de facturación. Se comparan las reservas asociadas a este mes de facturación (si una reserva no tiene mes asignado, cuenta el mes de entrada) contra lo facturado en ese período. Los NO SHOW cuentan 1 noche.`;
   ccRes=ccCompute()||[];
   const c=k=>ccRes.filter(r=>r.est===k).length, nh=ccRes.reduce((s,r)=>s+r.nh,0), nf=ccRes.reduce((s,r)=>s+r.nf,0), sh=ccRes.reduce((s,r)=>s+r.soloH,0), sf=ccRes.reduce((s,r)=>s+r.soloF,0);
   $('#ccSum').innerHTML=[[fmt0.format(nh),'Noches en hospedaje'],[fmt0.format(nf),'Noches facturadas'],[fmt0.format(sh),'Noches sin facturar'],[fmt0.format(sf),'Noches facturadas sin reserva'],[c('ok'),'Huéspedes que coinciden'],[c('nofact')+c('sinres')+c('dif'),'Huéspedes con diferencias']].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
