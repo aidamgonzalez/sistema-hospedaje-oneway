@@ -243,6 +243,8 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .kn{color:var(--muted);font-size:12px;margin-left:4px}
 .nsbox{background:var(--bad-bg);border-radius:8px;padding:8px 12px;color:var(--bad)}
 .nsbox input{accent-color:#B3261E}
+#ccTbl td{vertical-align:top;white-space:normal}#ccTbl .chip{white-space:nowrap}#ccTbl td.rg{font-size:12.5px;line-height:1.5;min-width:220px}
+#ccTbl .rg div{white-space:nowrap}#ccTbl td.det{font-size:12.5px;min-width:200px}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -391,6 +393,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <button role="tab" id="tab-hoteles" aria-selected="false" data-view="hoteles">Resumen por hotel</button>
     <button role="tab" id="tab-reportes" aria-selected="false" data-view="reportes">Reportes</button>
     <button role="tab" id="tab-creditos" aria-selected="false" data-view="creditos">Créditos</button>
+    <button role="tab" id="tab-conc" aria-selected="false" data-view="conc">Conciliación PDVSA</button>
   </div>
 </header>
 
@@ -472,6 +475,25 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="summary" id="pSum"></div>
       <div id="pBody"></div>
     </div>
+  </section>
+  <section id="view-conc" hidden>
+    <div class="rbar">
+      <div class="f"><label for="ccMes">Mes a conciliar</label><input type="month" id="ccMes" placeholder="2026-10"></div>
+      <div class="f" style="flex:1 1 280px"><label for="ccCont">Contratos de PDVSA en hospedaje (separados por coma)</label><input id="ccCont" style="width:100%"></div>
+      <div class="f"><label for="ccFile">Archivo del sistema de facturación</label><input type="file" id="ccFile" accept=".json,.xlsx,application/json"></div>
+      <div class="rexp"><button type="button" id="ccXls">Descargar Excel</button></div>
+    </div>
+    <p class="hint" id="ccInfo">Carga el <b>respaldo (.json)</b> o el <b>Excel del mes</b> descargado del sistema de facturación. El cruce se hace noche por noche, por huésped y hotel.</p>
+    <div class="summary" id="ccSum"></div>
+    <div class="rtabs" id="ccTabs" style="margin-block:10px">
+      <button type="button" data-cc="prob" aria-selected="true">Con diferencias</button>
+      <button type="button" data-cc="nofact" aria-selected="false">No facturado</button>
+      <button type="button" data-cc="sinres" aria-selected="false">Facturado sin reserva</button>
+      <button type="button" data-cc="dif" aria-selected="false">Noches u hotel distintos</button>
+      <button type="button" data-cc="ok" aria-selected="false">Coinciden</button>
+      <button type="button" data-cc="todos" aria-selected="false">Todos</button>
+    </div>
+    <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>En hospedaje</th><th>En facturación</th><th class="num">Noches hosp.</th><th class="num">Noches fact.</th><th>Detalle</th></tr></thead><tbody></tbody></table></div>
   </section>
   <section id="view-hoteles" hidden>
     <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
@@ -711,6 +733,7 @@ const COLS=[['hotel','Hotel'],['contrato','Contrato'],['pasajero','Pasajero'],['
 function render(){
   if(view==='reportes'){renderReport();return}
   if(view==='creditos'){renderCred();return}
+  if(view==='conc'){renderConc();return}
   const list=filtered();
   const k=sort.k,d=sort.d;
   let gk=null;
@@ -1020,7 +1043,7 @@ $('#tbl thead').addEventListener('click',e=>{const th=e.target.closest('th');if(
 $('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k);updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
 $('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
-function setView(v){view=v;page=0;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));$('#view-reservas').hidden=v!=='reservas';$('#view-hoteles').hidden=v!=='hoteles';$('#view-reportes').hidden=v!=='reportes';$('#view-creditos').hidden=v!=='creditos';$('#filters').hidden=v==='reportes'||v==='creditos';$('#summary').hidden=v==='reportes'||v==='creditos';render();updSel()}
+function setView(v){view=v;page=0;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));$('#view-reservas').hidden=v!=='reservas';$('#view-hoteles').hidden=v!=='hoteles';$('#view-reportes').hidden=v!=='reportes';$('#view-creditos').hidden=v!=='creditos';$('#view-conc').hidden=v!=='conc';$('#filters').hidden=v==='reportes'||v==='creditos'||v==='conc';$('#summary').hidden=v==='reportes'||v==='creditos'||v==='conc';render();updSel()}
 $('#newBtn').onclick=()=>openSheet(null);
 $('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();render()};
 $('#newHotelBtn').onclick=()=>openHotel(null);
@@ -1472,6 +1495,93 @@ $('#kQ').addEventListener('input',kRender); $('#kField').addEventListener('chang
 $('#unifBtn').onclick=()=>{if(!canWrite){toast('No tienes permiso para hacer este cambio.');return}kPending=null;$('#kFinal').value='';$('#kMsg').textContent='';kRender();$('#scrim').hidden=false;$('#ksheet').hidden=false};
 function closeK(){$('#ksheet').hidden=true;$('#scrim').hidden=true}
 $('#kClose').onclick=closeK;
+
+/* ---------- conciliación PDVSA ---------- */
+const CC_DEF='P1 LAURA, P1 GRAZIA, P1 ALEXIS, P1';
+let ccFact=null, ccFile='', ccTab='prob', ccRes=[];
+const ccUp=v=>String(v||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const ccMESA=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'], ccMESL=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+const ccAdd=(d,n)=>{const t=new Date(d+'T12:00:00Z');t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10)};
+function ccNights(cin,cout,ns,mes){const out=[];if(!cin)return out;if(!cout||cout<=cin)cout=ccAdd(cin,1);let d=cin,k=0;while(d<cout&&k<400){if(d.startsWith(mes))out.push(d);if(ns)break;d=ccAdd(d,1);k++}return out}
+const CC_STOP=new Set(['DE','DEL','LA','LAS','LOS','EL','Y']);
+function ccSplit(n){return String(n||'').split(/\s*\+\s*|\s+-\s+|\s*[,;\/]\s*|\s+Y\s+/i).map(ccUp).map(x=>x.replace(/[^A-ZÑ ]/g,' ').replace(/\s+/g,' ').trim()).filter(x=>x.split(' ').length>=2&&!/^(FLIA|FAMILIA|GRUPO|PILOTOS?)\b/.test(x))}
+const ccToks=n=>n.split(' ').filter(t=>t.length>1&&!CC_STOP.has(t));
+const CC_HAB={EURO:'EUROBUILDING',EUROBILDING:'EUROBUILDING',EUROBUILDIN:'EUROBUILDING',MCBO:'MARACAIBO',PLC:'PUERTO CRUZ',LIDO:'LIDOTEL',BQTO:'BARQUISIMETO',MGTA:'MARGARITA',CCS:'CARACAS',PTO:'PUERTO',STA:'SANTA'};
+const CC_HSTOP=new Set(['HOTEL','HOTELES','SUITE','SUITES','THE','DE','LA','EL','LAS','LOS','GH','INN','Y']);
+function ccHT(h){return new Set(ccUp(h).replace(/[^A-ZÑ ]/g,' ').split(' ').flatMap(t=>(CC_HAB[t]||t).split(' ')).filter(t=>t.length>=3&&!CC_HSTOP.has(t)))}
+function ccSameHotel(a,b){if(!a||!b)return true;const A=ccHT(a),B=ccHT(b);if(!A.size||!B.size)return ccUp(a)===ccUp(b);const I=[...A].filter(t=>B.has(t)).length;return I===A.size||I===B.size||I/new Set([...A,...B]).size>=0.5}
+function ccParseJSON(j){const L=(j.servicios||[]).filter(x=>x&&x.nombre);return L.map(x=>({nombre:x.nombre,hotel:x.hotel,cin:String(x.cin||'').slice(0,10),cout:String(x.cout||'').slice(0,10),ns:/\bNO\s*-?\s*SHOW\b/i.test(ccUp(x.obs)),ref:x.partida||'',periodo:x.periodo||''}))}
+function ccParseXLSX(buf){
+  const wb=XLSX.read(buf,{type:'array'}); let Y=null,M=null;
+  for(const n of wb.SheetNames){const ws=wb.Sheets[n];for(const a of Object.keys(ws)){if(a[0]==='!')continue;const v=ccUp(ws[a].v);const m=v.match(new RegExp('('+ccMESL.join('|')+')\\s+(20\\d\\d)'));if(m){M=ccMESL.indexOf(m[1])+1;Y=+m[2];break}}if(Y)break}
+  if(!Y) throw new Error('No encontré el mes en el Excel');
+  const yr=mon=>M===1&&mon===12?Y-1:(M===12&&mon===1?Y+1:Y);
+  const iso=(dd,mm)=>{const mon=ccMESA.indexOf(mm)+1;return mon?`${yr(mon)}-${String(mon).padStart(2,'0')}-${String(dd).padStart(2,'0')}`:''};
+  const out=[];
+  for(const n of wb.SheetNames){const ws=wb.Sheets[n];const g=a=>ws[a]?ws[a].v:null;
+    if(ccUp(g('B18'))!=='ITEM'||ccUp(g('C18'))!=='CLIENTE')continue;
+    for(let r=19;r<2000;r++){const it=g('B'+r);if(it==null||it===''){if(ccUp(g('B'+r))==='TOTAL'||!g('C'+r))break;continue}if(ccUp(it)==='TOTAL')break;
+      const desc=ccUp(g('E'+r));const mi=desc.match(/IN:\s*(\d{1,2})\s+([A-Z]{3})/),mo=desc.match(/OUT:\s*(\d{1,2})\s+([A-Z]{3})/);
+      out.push({nombre:g('C'+r),hotel:g('D'+r),cin:mi?iso(mi[1],mi[2]):'',cout:mo?iso(mo[1],mo[2]):'',ns:/\bNO\s*-?\s*SHOW\b/.test(desc),ref:n,periodo:`${Y}-${String(M).padStart(2,'0')}`})}}
+  return {recs:out,mes:`${Y}-${String(M).padStart(2,'0')}`};
+}
+function ccRange(dates){const L=[...dates].sort();const out=[];let a=null,b=null;for(const d of L){if(a&&ccAdd(b,1)===d){b=d}else{if(a)out.push([a,b]);a=b=d}}if(a)out.push([a,b]);return out}
+function ccFmtR(map){ // map date->[{hotel,ref}] -> lines grouped by hotel
+  const byH={};for(const [d,arr] of map){for(const x of arr){const k=ccUp(x.hotel)+'|'+(x.ref||'');(byH[k]=byH[k]||{h:x.hotel,ref:x.ref,ds:new Set()}).ds.add(d)}}
+  return Object.values(byH).map(o=>{const rs=ccRange(o.ds);return `<div><b>${esc(o.h||'')}</b>${o.ref?` <span class="mut">${esc(o.ref)}</span>`:''}</div>`+rs.map(([a,b])=>`<div>${fd(a).slice(0,5)}${a!==b?'–'+fd(b).slice(0,5):''} · ${Math.round((new Date(b)-new Date(a))/864e5)+1} n.</div>`).join('')}).join('')}
+function ccCompute(){
+  const mes=$('#ccMes').value; if(!mes||!ccFact) return null;
+  const conts=new Set($('#ccCont').value.split(',').map(ccUp).filter(Boolean));
+  const P=[]; const keyIdx=new Map();
+  const find=(name,create)=>{const T=ccToks(name),k=[...T].sort().join(' ');if(keyIdx.has(k))return keyIdx.get(k);
+    let best=null,bs=0;for(const p of P){const I=T.filter(t=>p.t.has(t)).length;if(I>=2&&(I===T.length||I===p.t.size)&&I>bs){best=p;bs=I}}
+    if(best)return best; if(!create)return null; const p={name,t:new Set(T),h:new Map(),f:new Map(),rows:[]};P.push(p);keyIdx.set(k,p);return p};
+  const add=(p,side,d,x)=>{const m=p[side];if(!m.has(d))m.set(d,[]);m.get(d).push(x)};
+  for(const r of rows){if(!conts.has(ccUp(r.contrato)))continue;const ns=isNoShow(r);const ds=ccNights(r.in,r.out,ns,mes);if(!ds.length)continue;
+    let names=ccSplit(r.pasajero);if(!names.length)names=[ccUp(r.pasajero)];
+    for(const n of names){const p=find(n,true);p.rows.push(r);ds.forEach(d=>add(p,'h',d,{hotel:r.hotel,ref:r.contrato}))}}
+  for(const x of ccFact){const ds=ccNights(x.cin,x.cout,x.ns,mes);if(!ds.length)continue;let names=ccSplit(x.nombre);if(!names.length)names=[ccUp(x.nombre)];
+    for(const n of names){const p=find(n,true);ds.forEach(d=>add(p,'f',d,{hotel:x.hotel,ref:x.ref}))}}
+  return P.map(p=>{const D=new Set([...p.h.keys(),...p.f.keys()]);let both=0,soloH=0,soloF=0,hotelDif=0,dobleF=0,dobleH=0;
+    for(const d of D){const h=p.h.get(d),f=p.f.get(d);if(h&&f){both++;if(!h.some(a=>f.some(b=>ccSameHotel(a.hotel,b.hotel))))hotelDif++}else if(h)soloH++;else soloF++;if(f&&f.length>1)dobleF++;if(h&&h.length>1)dobleH++}
+    let est;if(!p.f.size)est='nofact';else if(!p.h.size)est='sinres';else if(!soloH&&!soloF&&!hotelDif&&!dobleF)est='ok';else est='dif';
+    const det=[];if(soloH&&p.f.size)det.push(`${soloH} noche(s) sin facturar`);if(soloF&&p.h.size)det.push(`${soloF} noche(s) facturadas sin reserva`);if(hotelDif)det.push(`hotel distinto en ${hotelDif} noche(s)`);if(dobleF)det.push(`${dobleF} noche(s) facturadas dos veces`);if(dobleH)det.push(`${dobleH} noche(s) repetidas en hospedaje`);
+    if(est==='nofact')det.push('Está en hospedaje pero no en facturación');if(est==='sinres')det.push('Está facturado pero no hay reserva en hospedaje con esos contratos');
+    return {p,est,nh:p.h.size,nf:p.f.size,soloH,soloF,det:det.join(' · '),row:p.rows[0]}}).sort((a,b)=>({nofact:0,sinres:1,dif:2,ok:3}[a.est]-{nofact:0,sinres:1,dif:2,ok:3}[b.est])||a.p.name.localeCompare(b.p.name,'es'));
+}
+const CC_EST={ok:['ok','Coincide'],nofact:['warn','No facturado'],sinres:['bad','Facturado sin reserva'],dif:['info','Diferencia']};
+function renderConc(){
+  if(!$('#ccMes').value){const d=new Date();$('#ccMes').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+  if(!$('#ccCont').value){let v=null;try{v=localStorage.getItem('cc-contratos')}catch(e){}$('#ccCont').value=v||CC_DEF}
+  document.querySelectorAll('#ccTabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.cc===ccTab)));
+  const mes=$('#ccMes').value, my=+mes.slice(0,4);
+  if(!ccFact){$('#ccSum').innerHTML='';$('#ccTbl tbody').innerHTML='<tr><td colspan="7" class="empty"><h2>Carga el archivo de facturación</h2><p>Arriba, en “Archivo del sistema de facturación”, elige el respaldo (.json) o el Excel del mes.</p></td></tr>';return}
+  if(my!==year){$('#ccInfo').innerHTML=`El mes es de ${my} y estás viendo el año ${year}. Cambia el año arriba para comparar con las reservas de ${my}.`}
+  else $('#ccInfo').innerHTML=`Archivo: <b>${esc(ccFile)}</b> · ${ccFact.length} registros de facturación. El cruce es noche por noche, por huésped y hotel. Los NO SHOW cuentan 1 noche.`;
+  ccRes=ccCompute()||[];
+  const c=k=>ccRes.filter(r=>r.est===k).length, nh=ccRes.reduce((s,r)=>s+r.nh,0), nf=ccRes.reduce((s,r)=>s+r.nf,0), sh=ccRes.reduce((s,r)=>s+r.soloH,0), sf=ccRes.reduce((s,r)=>s+r.soloF,0);
+  $('#ccSum').innerHTML=[[fmt0.format(nh),'Noches en hospedaje'],[fmt0.format(nf),'Noches facturadas'],[fmt0.format(sh),'Noches sin facturar'],[fmt0.format(sf),'Noches facturadas sin reserva'],[c('ok'),'Huéspedes que coinciden'],[c('nofact')+c('sinres')+c('dif'),'Huéspedes con diferencias']].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  const L=ccRes.filter(r=>ccTab==='todos'||(ccTab==='prob'?r.est!=='ok':r.est===ccTab));
+  $('#ccTbl tbody').innerHTML=L.length?L.map((r,i)=>{const [cl,lb]=CC_EST[r.est];return `<tr ${r.row?`data-id="${esc(r.row.slug+'|'+r.row.id)}"`:''}><td><span class="chip ${cl}">${lb}</span></td><td class="pax"><b>${esc(r.p.name)}</b></td><td class="rg">${ccFmtR(r.p.h)||'<span class="mut">—</span>'}</td><td class="rg">${ccFmtR(r.p.f)||'<span class="mut">—</span>'}</td><td class="num">${r.nh}</td><td class="num">${r.nf}</td><td class="det">${esc(r.det)}</td></tr>`}).join('')
+    :'<tr><td colspan="7" class="empty">No hay huéspedes en esta categoría. 🎉</td></tr>';
+}
+$('#ccFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;
+  try{ if(/\.json$/i.test(f.name)||f.type.includes('json')){ccFact=ccParseJSON(JSON.parse(await f.text()))}
+    else{ if(typeof XLSX==='undefined')throw new Error('No se pudo cargar el lector de Excel'); const r=ccParseXLSX(new Uint8Array(await f.arrayBuffer())); ccFact=r.recs; $('#ccMes').value=r.mes }
+    if(!ccFact.length)throw new Error('El archivo no tiene registros de hospedaje'); ccFile=f.name; toast(`${ccFact.length} registros de facturación cargados`); renderConc();
+  }catch(err){ccFact=null;toast('No pude leer el archivo: '+(err.message||err));renderConc()}});
+$('#ccMes').addEventListener('change',renderConc);
+$('#ccCont').addEventListener('change',()=>{try{localStorage.setItem('cc-contratos',$('#ccCont').value)}catch(e){}renderConc()});
+document.querySelectorAll('#ccTabs button').forEach(b=>b.onclick=()=>{ccTab=b.dataset.cc;renderConc()});
+$('#ccTbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const [sl,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===sl&&x.id===id);if(r)openSheet(r)});
+$('#ccXls').onclick=async()=>{ if(!ccRes.length){toast('Primero carga el archivo de facturación.');return} if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel.');return}
+  const txt=m=>{const byH={};for(const [d,arr] of m)for(const x of arr){const k=ccUp(x.hotel)+' '+(x.ref?'('+x.ref+')':'');(byH[k]=byH[k]||new Set()).add(d)}return Object.entries(byH).map(([h,ds])=>h+': '+ccRange(ds).map(([a,b])=>fd(a)+(a!==b?'-'+fd(b):'')).join(', ')).join(' | ')};
+  const aoa=[['CONCILIACION HOSPEDAJE vs FACTURACION PDVSA — '+$('#ccMes').value],['Contratos: '+$('#ccCont').value+' · Archivo: '+ccFile],[],['ESTADO','HUESPED','EN HOSPEDAJE','EN FACTURACION','NOCHES HOSPEDAJE','NOCHES FACTURADAS','SIN FACTURAR','FACTURADAS SIN RESERVA','DETALLE']];
+  for(const r of ccRes)aoa.push([CC_EST[r.est][1],r.p.name,txt(r.p.h),txt(r.p.f),r.nh,r.nf,r.soloH,r.soloF,r.det]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:20},{wch:32},{wch:50},{wch:50},{wch:10},{wch:10},{wch:10},{wch:12},{wch:50}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'CONCILIACION');
+  await saveFile(`CONCILIACION PDVSA ${$('#ccMes').value}.xlsx`,XLSX.write(wb,{bookType:'xlsx',type:'array'}));
+};
 
 /* ---------- horizontal scroll ---------- */
 (()=>{const box=$('#tblBox');const step=()=>Math.max(240,box.clientWidth*0.6);
