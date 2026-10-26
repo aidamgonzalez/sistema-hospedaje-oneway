@@ -615,7 +615,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="grid2">
       <div class="f"><label for="gtBs">Monto total Bs</label><input id="gtBs" type="number" step="0.01" min="0"></div>
       <div class="f"><label for="gtBcv">Tasa BCV</label><input id="gtBcv" type="number" step="0.01" min="0"></div>
-      <div class="f"><label for="gtUsd" id="gtLblUsd">Monto total $</label><input id="gtUsd" type="number" step="0.01" min="0"><span class="hint">Se calcula solo: Bs ÷ tasa</span></div>
+      <div class="f"><label for="gtUsd" id="gtLblUsd">Monto total $</label><input id="gtUsd" type="number" step="0.01" min="0"><span class="hint">El último que escribas manda: $ × tasa = Bs · Bs ÷ tasa = $</span></div>
       <div class="f"><label for="gtFac">Factura</label><input id="gtFac" placeholder="Opcional"></div>
       <div class="f full"><label for="gtSt">Status de pago para todas</label><input id="gtSt" list="dlStatus" placeholder="Dejar igual"></div>
     </div>
@@ -851,15 +851,16 @@ function openGTotal(mem,fromSheet){
   $('#gtList').innerHTML=gtMem.map(r=>`<li><b>${esc(r.pasajero||'')}</b> · ${esc(r.hotel)} · ${fd(r.in)}–${fd(r.out)}${num(r.bs)!=null?` <span class="mut">(Bs ${fmt2.format(r.bs)})</span>`:''}</li>`).join('');
   const sb=gtMem.reduce((s,r)=>s+(num(r.bs)||0),0), su=gtMem.reduce((s,r)=>s+(num(r.usd)||0),0);
   const bcv=gtMem.map(r=>num(r.bcv)).find(v=>v!=null) ?? (m0.in===todayStr()?tasaFor(m0.in,eur?'EUR':'USD')?.v:null);
-  $('#gtBs').value=sb?Math.round(sb*100)/100:''; $('#gtBcv').value=bcv??''; $('#gtUsd').value=su?Math.round(su*100)/100:'';
+  gtBase=null; $('#gtBs').value=sb?Math.round(sb*100)/100:''; $('#gtBcv').value=bcv??''; $('#gtUsd').value=su?Math.round(su*100)/100:'';
   $('#gtFac').value=[...new Set(gtMem.map(r=>r.factura).filter(Boolean))].join(', '); $('#gtSt').value='';
   $('#gtMsg').textContent=gtMem.filter(r=>num(r.bs)!=null||num(r.usd)!=null).length>1?'Estas reservas ya tenían montos por separado; abajo ves la suma. Si colocas el total, reemplaza esos montos.':'';
   $('#scrim').hidden=false; $('#gsheet').hidden=false; setTimeout(()=>$('#gtBs').focus(),50);
 }
 function closeGT(){ $('#gsheet').hidden=true; if($('#sheet').hidden&&$('#hsheet').hidden) $('#scrim').hidden=true }
-function gtCalc(){ const b=gtN($('#gtBs').value), t=gtN($('#gtBcv').value); if(b!=null&&t) $('#gtUsd').value=Math.round(b/t*100)/100 }
-$('#gtBs').addEventListener('input',gtCalc); $('#gtBcv').addEventListener('input',gtCalc);
-$('#gtUsd').addEventListener('input',()=>{ const u=gtN($('#gtUsd').value), t=gtN($('#gtBcv').value); if(u!=null&&t&&gtN($('#gtBs').value)==null) $('#gtBs').placeholder='≈ '+fmt2.format(u*t) });
+let gtBase=null;
+function gtCalc(){ const b=gtN($('#gtBs').value), u=gtN($('#gtUsd').value), t=gtN($('#gtBcv').value); if(!t) return;
+  if((gtBase||(b!=null?'bs':'usd'))==='bs'){ if(b!=null) $('#gtUsd').value=(b/t).toFixed(2) } else if(u!=null) $('#gtBs').value=(u*t).toFixed(2) }
+$('#gtBs').addEventListener('input',()=>{gtBase='bs';gtCalc()}); $('#gtUsd').addEventListener('input',()=>{gtBase='usd';gtCalc()}); $('#gtBcv').addEventListener('input',gtCalc);
 $('#gtClose').onclick=closeGT; $('#gtSkip').onclick=closeGT;
 $('#gtSave').onclick=async()=>{
   const bs=gtN($('#gtBs').value), bcv=gtN($('#gtBcv').value), usd=gtN($('#gtUsd').value), fac=$('#gtFac').value.trim(), st=$('#gtSt').value.trim().toUpperCase().replace(/\s+/g,' ');
@@ -926,7 +927,7 @@ function openSheet(r,pre){
   if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
   F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||'';
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
-  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; bsAuto=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
@@ -973,13 +974,15 @@ function checkCruce(){
 }
 
 F.eIn.addEventListener('change',()=>{nights();checkCruce()});F.eIn.addEventListener('input',checkCruce); F.eOut.addEventListener('change',()=>{nights();checkCruce()}); F.ePax.addEventListener('change',checkCruce); [F.eIn,F.eOut,F.ePax,F.eHotel].forEach(el=>['change','input'].forEach(ev=>el.addEventListener(ev,()=>{clearTimeout(renderExt.t);renderExt.t=setTimeout(renderExt,300)}))); F.ePax.addEventListener('input',()=>{clearTimeout(checkCruce.t);checkCruce.t=setTimeout(checkCruce,350)}); F.eStatus.addEventListener('change',checkCruce); $('#eNoShow').addEventListener('change',()=>{checkCruce();renderExt()});
-/* Regla de montos: el monto en Bs manda; Monto $ = Monto Bs ÷ Tasa. Solo si no hay Bs, se calcula Bs = $ × Tasa. */
-let bsAuto=null;
+/* Regla de montos: el último que escribes manda.
+   Escribes $ → Bs = $ × Tasa.  Escribes Bs → $ = Bs ÷ Tasa.  Cambias la tasa → se recalcula desde el último que escribiste. */
+let moneyBase=null;
+const baseNow=()=>moneyBase||(F.eBs.value?'bs':'usd');
 function usdDesdeBs(){const t=parseFloat(F.eBcv.value),b=parseFloat(F.eBs.value);if(b>0&&t>0){F.eUsd.value=(b/t).toFixed(2);return true}return false}
-function calcBs(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value),bv=F.eBs.value;if(u>0&&t>0&&(!bv||bv===bsAuto)){F.eBs.value=(u*t).toFixed(2);bsAuto=F.eBs.value}}
-F.eUsd.addEventListener('input',calcBs);
-F.eBcv.addEventListener('input',()=>{const bv=F.eBs.value;if(bv&&bv!==bsAuto)usdDesdeBs();else calcBs()});
-F.eBs.addEventListener('input',()=>{bsAuto=null;usdDesdeBs()});
+function calcBs(){const u=parseFloat(F.eUsd.value),t=parseFloat(F.eBcv.value);if(u>0&&t>0){F.eBs.value=(u*t).toFixed(2);return true}return false}
+F.eUsd.addEventListener('input',()=>{moneyBase='usd';calcBs()});
+F.eBcv.addEventListener('input',()=>recalcFromBcv());
+F.eBs.addEventListener('input',()=>{moneyBase='bs';usdDesdeBs()});
 
 function xRow(e){e=e||{};const d=document.createElement('div');d.className='xrow';
   d.innerHTML=`<div class="f"><label>Concepto</label><input class="xc" list="dlXc" value="${esc(e.concepto||'')}" placeholder="Comidas"></div>
@@ -991,9 +994,10 @@ function xRow(e){e=e||{};const d=document.createElement('div');d.className='xrow
   <label class="check xrl"><input type="checkbox" class="xr" ${e.ret_ok?'checked':''}> Retención lista <input class="xrc" placeholder="N° comprobante" value="${esc(e.ret_comp||'')}" style="width:auto;flex:1;padding:4px 8px"></label>
   <button type="button" class="xdel" aria-label="Quitar factura">✕</button>`;
   const u=d.querySelector('.xu'),t=d.querySelector('.xt'),b=d.querySelector('.xb');
-  let ba=null; const u2=()=>{const B=parseFloat(b.value),T=parseFloat(t.value);if(B>0&&T>0)u.value=(B/T).toFixed(2)};
-  const calc=()=>{const U=parseFloat(u.value),T=parseFloat(t.value);if(U>0&&T>0&&(!b.value||b.value===ba)){b.value=(U*T).toFixed(2);ba=b.value}xTot()};
-  u.addEventListener('input',calc);t.addEventListener('input',()=>{if(b.value&&b.value!==ba){u2();xTot()}else calc()});b.addEventListener('input',()=>{ba=null;u2();xTot()});
+  let xb=null; const u2=()=>{const B=parseFloat(b.value),T=parseFloat(t.value);if(B>0&&T>0)u.value=(B/T).toFixed(2)};
+  const b2=()=>{const U=parseFloat(u.value),T=parseFloat(t.value);if(U>0&&T>0)b.value=(U*T).toFixed(2)};
+  u.addEventListener('input',()=>{xb='usd';b2();xTot()});b.addEventListener('input',()=>{xb='bs';u2();xTot()});
+  t.addEventListener('input',()=>{((xb||(b.value?'bs':'usd'))==='bs')?u2():b2();xTot()});
   d.querySelector('.xs').addEventListener('change',xTot);
   d.querySelector('.xdel').onclick=()=>{d.remove();xTot()};
   $('#xList').appendChild(d);}
@@ -1283,7 +1287,7 @@ $('#tFSave').onclick=async()=>{const d=$('#tF').value;if(!d){toast('Elige la fec
 $('#tform').addEventListener('submit',e=>{e.preventDefault();$('#tFSave').click()});
 let autoBcv=null;
 function hotelMon(){return allHotels()[upN(F.eHotel.value)]?.moneda||editing?.moneda||'USD'}
-function recalcFromBcv(){const bv=F.eBs.value;if(bv&&bv!==bsAuto)usdDesdeBs();else calcBs()}
+function recalcFromBcv(){baseNow()==='bs'?usdDesdeBs():calcBs()}
 function retHint(){const pc=hotelPct(F.eHotel.value),b=parseFloat(F.eBs.value);const el=$('#retHint');if(!F.eHotel.value.trim()){el.textContent='';return}
   el.innerHTML=pc==null?'Retención de este hotel: sin definir (configúrala en Resumen por hotel → Editar).':(+pc===0?'Este hotel no tiene retención.':`Retención ${pc}% del IVA${b>0?`: Bs ${fmt2.format(retOf(b,pc))} · a pagar al hotel Bs <b>${fmt2.format(b-retOf(b,pc))}</b>`:''}`)}
 function bcvHint(){ retHint();
