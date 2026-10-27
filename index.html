@@ -247,6 +247,7 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 #ccTbl .rg div{white-space:nowrap}#ccTbl td.det{font-size:12.5px;min-width:200px}
 #gsheet .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}#gsheet .full{grid-column:1/-1}
 .gtlist{margin:0;padding:10px 12px 10px 28px;background:rgba(200,169,106,.12);border-radius:10px;font-size:13px;line-height:1.6}
+.monsel{padding:4px 6px;border-radius:8px;font-size:12.5px}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -824,15 +825,15 @@ function renderHotels(list){
   const AH=allHotels();
   const arr=Object.entries(AH).filter(([k])=>(!hf||k.includes(hf))&&(!others||g[k])).map(([k,m])=>[m,g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0}])
     .sort($('#fPend').checked?((a,b)=>b[1].pb-a[1].pb||b[1].pu-a[1].pu||b[1].pend-a[1].pend):((a,b)=>b[1].n-a[1].n||a[0].nombre.localeCompare(b[0].nombre,'es')));
-  $('#tblH thead').innerHTML='<tr><th>Hotel</th><th>Estado</th><th>Categoría</th><th>Retención</th><th class="num">Reservas</th><th class="num">Noches</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th><th class="num">Por pagar</th><th class="num">Pendiente $ / €</th><th class="num">Pendiente Bs</th><th class="num">A pagar Bs</th><th></th></tr>';
-  $('#tblH tbody').innerHTML=arr.length?arr.map(([m,h])=>`<tr data-hotel="${esc(m.nombre)}" class="${h.n?'':'zero'}"><td class="hotel">${esc(m.nombre)}</td><td>${esc(m.estado||'')}</td><td>${esc(m.categoria||'')}</td><td>${pctSel(`data-hret="${esc(m.nombre)}"`,m.retencion)}</td>
+  $('#tblH thead').innerHTML='<tr><th>Hotel</th><th>Estado</th><th>Categoría</th><th>Moneda</th><th>Retención</th><th class="num">Reservas</th><th class="num">Noches</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th><th class="num">Por pagar</th><th class="num">Pendiente $ / €</th><th class="num">Pendiente Bs</th><th class="num">A pagar Bs</th><th></th></tr>';
+  $('#tblH tbody').innerHTML=arr.length?arr.map(([m,h])=>`<tr data-hotel="${esc(m.nombre)}" class="${h.n?'':'zero'}"><td class="hotel">${esc(m.nombre)}</td><td>${esc(m.estado||'')}</td><td>${esc(m.categoria||'')}</td><td><select class="monsel" data-hmon="${esc(m.nombre)}" ${canWrite?'':'disabled'} aria-label="Moneda de cobro"><option value="USD" ${m.moneda!=='EUR'?'selected':''}>Dólares ($)</option><option value="EUR" ${m.moneda==='EUR'?'selected':''}>Euros (€)</option></select></td><td>${pctSel(`data-hret="${esc(m.nombre)}"`,m.retencion)}</td>
     <td class="num">${fmt0.format(h.n)}</td><td class="num">${fmt0.format(h.noches)}</td><td class="num">${m.moneda==='EUR'?'€ ':''}${fmt2.format(h.usd)}</td><td class="num">${fmt2.format(h.bs)}</td>
     <td class="num">${h.pend?`<span class="chip warn pendchip" data-pend="${esc(m.nombre)}" title="Ver reservas por pagar">${h.pend}</span>`:'—'}</td><td class="num">${h.pu?(m.moneda==='EUR'?'€ ':'')+fmt2.format(h.pu):''}</td><td class="num">${h.pb?fmt2.format(h.pb):''}</td><td class="num">${h.pb?'<b>'+fmt2.format(h.pb-h.pr)+'</b>':''}</td><td>${canWrite?`<button type="button" class="edit" data-edit="${esc(m.nombre)}">Editar</button>`:''}</td></tr>`).join('')
-    :`<tr><td colspan="13" class="empty">Ningún hotel coincide con “${esc($('#fHotel').value)}”. Puedes crearlo con “+ Agregar hotel”.</td></tr>`;
+    :`<tr><td colspan="14" class="empty">Ningún hotel coincide con “${esc($('#fHotel').value)}”. Puedes crearlo con “+ Agregar hotel”.</td></tr>`;
   let tf=$('#tblH tfoot'); if(!tf){tf=document.createElement('tfoot');$('#tblH').appendChild(tf)}
   const T=arr.reduce((t,[,h])=>{t.n+=h.n;t.no+=h.noches;t.bs+=h.bs;t.pend+=h.pend;t.pb+=h.pb;t.pr+=h.pr;return t},{n:0,no:0,bs:0,pend:0,pb:0,pr:0});
   const TU=arr.reduce((t,[m,h])=>{t[m.moneda==='EUR'?'e':'u']+=h.usd;t[m.moneda==='EUR'?'pe':'pu']+=h.pu;return t},{u:0,e:0,pu:0,pe:0});
-  tf.innerHTML=arr.length?`<tr><td>TOTAL (${arr.length} hoteles)</td><td></td><td></td><td></td><td class="num">${fmt0.format(T.n)}</td><td class="num">${fmt0.format(T.no)}</td><td class="num">${fmt2.format(TU.u)}${TU.e?`<span class="sub">€ ${fmt2.format(TU.e)}</span>`:''}</td><td class="num">${fmt2.format(T.bs)}</td><td class="num">${fmt0.format(T.pend)}</td><td class="num">${fmt2.format(TU.pu)}${TU.pe?`<span class="sub">€ ${fmt2.format(TU.pe)}</span>`:''}</td><td class="num">${fmt2.format(T.pb)}</td><td class="num">${fmt2.format(T.pb-T.pr)}</td><td></td></tr>`:'';
+  tf.innerHTML=arr.length?`<tr><td>TOTAL (${arr.length} hoteles)</td><td></td><td></td><td></td><td></td><td class="num">${fmt0.format(T.n)}</td><td class="num">${fmt0.format(T.no)}</td><td class="num">${fmt2.format(TU.u)}${TU.e?`<span class="sub">€ ${fmt2.format(TU.e)}</span>`:''}</td><td class="num">${fmt2.format(T.bs)}</td><td class="num">${fmt0.format(T.pend)}</td><td class="num">${fmt2.format(TU.pu)}${TU.pe?`<span class="sub">€ ${fmt2.format(TU.pe)}</span>`:''}</td><td class="num">${fmt2.format(T.pb)}</td><td class="num">${fmt2.format(T.pb-T.pr)}</td><td></td></tr>`:'';
 }
 
 /* ---------- shared payments ---------- */
@@ -1328,7 +1329,18 @@ async function setHotelPct(name,pct){
   const meta={nombre:m.nombre,estado:m.estado,categoria:m.categoria,moneda:m.moneda,retencion:pct};
   await writeCatalog(m.slug,meta); if(hotels[m.slug]) await col().doc(m.slug).update({retencion:pct});
 }
-document.addEventListener('click',e=>{if(e.target.closest('.pctsel'))e.stopPropagation()},true);
+document.addEventListener('click',e=>{if(e.target.closest('.pctsel,.monsel'))e.stopPropagation()},true);
+document.addEventListener('change',async e=>{
+  const sel=e.target.closest('.monsel'); if(!sel) return;
+  const m=allHotels()[upN(sel.dataset.hmon)]; if(!m) return; const mon=sel.value;
+  try{
+    await writeCatalog(m.slug,{nombre:m.nombre,estado:m.estado,categoria:m.categoria,moneda:mon,retencion:m.retencion??null});
+    if(hotels[m.slug]) await col().doc(m.slug).update({moneda:mon});
+    const its={}; for(const [id,d] of Object.entries(deu.items||{})) if(d&&!d._borrado&&upN(d.hotel)===upN(m.nombre)&&d.moneda!==mon) its[id]={...d,moneda:mon};
+    if(Object.keys(its).length){ try{ await saveDeuItems({items:its}) }catch(x){} }
+    toast(`${m.nombre} cobra en ${mon==='EUR'?'euros (€)':'dólares ($)'}`);
+  }catch(err){ toast('No se pudo cambiar la moneda.'); sel.value=m.moneda||'USD' }
+});
 document.addEventListener('change',async e=>{
   const sel=e.target.closest('.pctsel'); if(!sel) return;
   const pct=sel.value===''?null:+sel.value;
