@@ -413,6 +413,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="f"><label for="fRet">Retención</label><select id="fRet"><option value="">Todas</option><option value="pend">Pendiente</option><option value="ok">Lista</option></select></div>
   <div class="f"><label for="fNS">No show</label><select id="fNS"><option value="">Todos</option><option value="si">Solo no show</option><option value="no">Sin no show</option></select></div>
   <label class="check"><input type="checkbox" id="fCruce"> Solo fechas cruzadas</label>
+  <div class="f"><label for="fOrden">Orden</label><select id="fOrden"><option value="ord:-1">Últimas cargadas primero</option><option value="ord:1">Primeras cargadas primero</option><option value="in:-1">Check-in más lejano primero</option><option value="in:1">Check-in más cercano primero</option></select></div>
   <button class="ghost" id="clearBtn" type="button">Limpiar</button>
   <button class="ghost" id="unifBtn" type="button">Unificar nombres</button>
 </div>
@@ -657,7 +658,7 @@ let rows=[];        // flattened {id, slug, hotel, ...}
 let year=2026, anios=[2026], unsub=null;
 try{const y=parseInt(localStorage.getItem('hosp-year'));if(y)year=y}catch(e){}
 let sel=new Set(), gsize={}, pendingGroup=null;
-let view='reservas', sort={k:'in',d:-1}, page=0, editing=null, loaded=false;
+let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
 const fmt2=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt0=new Intl.NumberFormat('es-VE');
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -704,7 +705,7 @@ function rebuild(){
   const out=[];
   for(const [sid,h] of Object.entries(hotels)){
     const rs=h.rows||{};
-    for(const [id,r] of Object.entries(rs)){ if(!r||r._borrado) continue; out.push({...r,id,slug:sid,hotel:h.nombre,moneda:h.moneda||'USD'}); }
+    for(const [id,r] of Object.entries(rs)){ if(!r||r._borrado) continue; out.push({...r,id,slug:sid,hotel:h.nombre,moneda:h.moneda||'USD',ord:id[0]==='n'?2e12+parseInt(id.slice(1,-4),36):(parseInt(id.slice(1),36)||0)}); }
   }
   // overlap detection: same passenger string, overlapping stays
   const by={};
@@ -762,7 +763,7 @@ function render(){
   const list=filtered();
   const k=sort.k,d=sort.d;
   let gk=null;
-  if(k==='in'||k==='out'||k==='hotel'||k==='contrato'){ gk={}; for(const r of list) if(r.grupo){const v=r[k];const c=gk[r.grupo];if(v!=null&&(c==null||(d>0?v<c:v>c)))gk[r.grupo]=v} }
+  if(k==='in'||k==='out'||k==='hotel'||k==='contrato'||k==='ord'){ gk={}; for(const r of list) if(r.grupo){const v=r[k];const c=gk[r.grupo];if(v!=null&&(c==null||(d>0?v<c:v>c)))gk[r.grupo]=v} }
   const key=r=>gk&&r.grupo&&gk[r.grupo]!=null?gk[r.grupo]:r[k];
   list.sort((a,b)=>{const x=key(a),y=key(b);let c;if(x==null&&y==null)c=0;else if(x==null)return 1;else if(y==null)return -1;else c=(x<y?-1:x>y?1:0)*d;
     if(c||!gk)return c; const ga=a.grupo||'~'+a.id, gb=b.grupo||'~'+b.id; if(ga!==gb)return ga<gb?-1:1; return (a.in||'')<(b.in||'')?-1:(a.in||'')>(b.in||'')?1:0});
@@ -1102,7 +1103,9 @@ async function exportXlsx(){
 ['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
 ['#q','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'?'input':'change',()=>{page=0;render()}));
 $('#clearBtn').onclick=()=>{$('#q').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
-$('#tbl thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th)return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};render()});
+$('#tbl thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th)return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
+$('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
+try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
 $('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k);updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
 $('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
