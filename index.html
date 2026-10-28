@@ -428,7 +428,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox" id="tblBox"><table id="tbl"><thead></thead><tbody></tbody></table></div>
     <div class="empty" id="empty" hidden><h2 id="emptyTitle">Cargando las reservas…</h2><p id="emptyTxt">En cuanto lleguen los datos aparecen aquí. Para registrar una, usa “+ Nueva reserva”.</p></div>
     <div class="pager" id="pager"></div>
-    <div class="selbar" id="selbar" hidden><b id="selN"></b><span id="selSum" class="selsum"></span><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
+    <div class="selbar" id="selbar" hidden><b id="selN"></b><span id="selSum" class="selsum"></span><button id="imgBtn" type="button">🖼 Imagen para el hotel</button><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
   </section>
   <section id="view-reportes" hidden>
     <div class="rbar">
@@ -618,6 +618,15 @@ html,body{max-width:100%;overflow-x:hidden}
     <p class="hint full">Elige una fecha para cargar o corregir su tasa. Las reservas usan la tasa del día en que se registran; si un día no tiene tasa, se usa la del último día cargado.</p>
     <div class="full tablebox"><table id="tTbl"><thead><tr><th>Fecha</th><th class="num">Tasa $</th><th class="num">Tasa €</th></tr></thead><tbody></tbody></table></div>
   </form>
+</aside>
+<aside class="sheet" id="isheet" hidden aria-labelledby="iTitle">
+  <header><h2 id="iTitle">Imagen para el hotel</h2><button class="ghost" id="iClose" type="button" aria-label="Cerrar">✕</button></header>
+  <div style="display:flex;flex-direction:column;gap:12px;padding-bottom:12px">
+    <label class="check"><input type="checkbox" id="iBs"> Mostrar también el monto en Bs</label>
+    <img id="iPrev" alt="Vista previa de la relación de pago" style="width:100%;border:1px solid var(--line);border-radius:10px;background:#fff">
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="iDown" type="button">Descargar imagen</button><button id="iShare" type="button" hidden>Compartir (WhatsApp…)</button><button id="iCopy" type="button" hidden>Copiar imagen</button></div>
+    <p class="hint">Revisa la imagen antes de enviarla. Se genera con las reservas que tienes seleccionadas.</p>
+  </div>
 </aside>
 <aside class="sheet" id="gsheet" hidden aria-labelledby="gTitle">
   <header><h2 id="gTitle">Monto total del pago</h2><button class="ghost" id="gtClose" type="button" aria-label="Cerrar">✕</button></header>
@@ -895,6 +904,57 @@ $('#gtSave').onclick=async()=>{
   try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`Monto total guardado para ${gtMem.length} reservas.`); closeGT(); if(gtFromSheet) closeSheet() }
   catch(e){ toast('No se pudo guardar el monto. Inténtalo de nuevo.') }
 };
+let imgBlob=null, imgName='';
+function selRows(){return [...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean)}
+async function buildPayImg(){
+  const rs=selRows().sort((a,b)=>a.hotel.localeCompare(b.hotel,'es')||(a.in||'').localeCompare(b.in||'')||String(a.pasajero||'').localeCompare(String(b.pasajero||''),'es'));
+  const showBs=$('#iBs').checked, byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
+  const S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
+  const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
+  const cols=showBs?[['N°',44,'c'],['Pasajero',306,'l'],['Check-in',110,'c'],['Check-out',110,'c'],['Noches',78,'c'],['ML',130,'r'],['Monto Bs',150,'r']]:[['N°',50,'c'],['Pasajero',398,'l'],['Check-in',120,'c'],['Check-out',120,'c'],['Noches',90,'c'],['ML',150,'r']]; cols.forEach(c=>{if(c[0]==='ML')c[0]=ML});
+  const cv=document.createElement('canvas'), g=cv.getContext('2d'), F=(w,sz)=>`${w} ${sz}px system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
+  const wrap=(t,mw,font)=>{g.font=font;const out=[];let line='';for(const w of String(t||'').split(/\s+/)){const tst=line?line+' '+w:w;if(g.measureText(tst).width>mw&&line){out.push(line);line=w}else line=tst}if(line)out.push(line);return out.length?out:['']};
+  const amt=r=>{const v=r.tusd;if(v==null)return r.grupo?'incl. pago comp.':'—';return (r.moneda==='EUR'?'€ ':'$ ')+fmt2.format(v)};
+  // measure
+  let H=150; const plan=[];
+  for(const [h,L] of Object.entries(byH)){ const rws=L.map(r=>{const lines=wrap(r.pasajero,cols[1][1]-16,F(500,17));return {r,lines,h:Math.max(40,lines.length*22+18)}}); plan.push({h,rws}); H+=56+40+rws.reduce((a,x)=>a+x.h,0)+46+26 }
+  H+=50; cv.width=W*S; cv.height=H*S; g.scale(S,S);
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  g.fillStyle=NAVY; g.fillRect(0,0,W,104); g.fillStyle=SAND; g.fillRect(0,104,W,5);
+  g.textBaseline='middle'; g.font=F(800,36); g.fillStyle=SAND; g.fillText('ONE',36,52); const ow=g.measureText('ONE').width; g.fillStyle='#fff'; g.fillText('WAY',36+ow,52);
+  g.font=F(400,13); g.fillStyle='#cfd8e2'; g.fillText('TRAVEL AGENCY',38,82);
+  g.textAlign='right'; g.font=F(700,22); g.fillStyle='#fff'; g.fillText('RELACIÓN DE RESERVAS A PAGAR',W-36,44); g.font=F(400,15); g.fillStyle='#cfd8e2'; g.fillText('Fecha: '+fd(todayStr()),W-36,72); g.textAlign='left';
+  let y=140; const X0=36, TW=W-72;
+  for(const {h,rws} of plan){
+    g.font=F(800,21); g.fillStyle=NAVY; g.fillText(h,X0,y+18); y+=48;
+    g.fillStyle=NAVY; g.fillRect(X0,y,TW,38); let x=X0; g.font=F(700,14); g.fillStyle='#fff';
+    for(const [l,w,a] of cols){ g.textAlign=a==='c'?'center':a==='r'?'right':'left'; g.fillText(l.toUpperCase(),a==='c'?x+w/2:a==='r'?x+w-10:x+10,y+19); x+=w } y+=38; g.textAlign='left';
+    let tn=0,tu=0,te=0,tb=0;
+    rws.forEach(({r,lines,h:rh},i)=>{ g.fillStyle=i%2?'#faf6ef':'#fff'; g.fillRect(X0,y,TW,rh); g.fillStyle=LINE; g.fillRect(X0,y+rh-1,TW,1);
+      const vals=[String(i+1),null,fd(r.in),fd(r.out),r.noches!=null?String(r.noches):'',amt(r)]; if(showBs) vals.push(r.tbs!=null?fmt2.format(r.tbs):(r.grupo?'incl.':'—'));
+      let x=X0; cols.forEach(([l,w,a],k)=>{ g.fillStyle=k===5&&vals[5].startsWith('incl')?MUT:INK; g.font=F(k===1?600:k===5?700:400,k===5&&vals[5].startsWith('incl')?13:16);
+        if(k===1){ g.font=F(600,17); lines.forEach((ln,j)=>g.fillText(ln,x+10,y+rh/2-(lines.length-1)*11+j*22)) }
+        else { g.textAlign=a==='c'?'center':a==='r'?'right':'left'; g.fillText(vals[k],a==='c'?x+w/2:a==='r'?x+w-10:x+10,y+rh/2); g.textAlign='left' }
+        x+=w });
+      tn+=num(r.noches)||0; if(r.moneda==='EUR')te+=r.tusd||0; else tu+=r.tusd||0; tb+=r.tbs||0; y+=rh });
+    g.fillStyle='#f1e7d6'; g.fillRect(X0,y,TW,46); g.fillStyle=SAND; g.fillRect(X0,y,TW,2);
+    g.font=F(800,17); g.fillStyle=NAVY; g.fillText(`TOTAL · ${rws.length} reserva${rws.length>1?'s':''}`,X0+10,y+23);
+    let xt=X0+cols.slice(0,4).reduce((a,c)=>a+c[1],0); g.textAlign='center'; g.fillText(fmt0.format(tn),xt+cols[4][1]/2,y+23); xt+=cols[4][1];
+    g.textAlign='right'; g.fillText((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),xt+cols[5][1]-10,y+23); if(showBs){xt+=cols[5][1];g.fillText(fmt2.format(tb),xt+cols[6][1]-10,y+23)} g.textAlign='left';
+    y+=46+26 }
+  g.font=F(400,12); g.fillStyle=MUT; g.fillText('Generado por el Sistema de Hospedaje · One Way Travel Agency',X0,H-24);
+  imgBlob=await new Promise(res=>cv.toBlob(res,'image/png'));
+  const hs=Object.keys(byH); imgName=`PAGO ${hs.length===1?hs[0]:'HOTELES'} ${fd(todayStr()).replace(/\//g,'-')}.png`;
+  const pr=$('#iPrev'); if(pr.dataset.u) URL.revokeObjectURL(pr.dataset.u); pr.dataset.u=URL.createObjectURL(imgBlob); pr.src=pr.dataset.u;
+  let can=false; try{ can=!!(navigator.canShare&&navigator.canShare({files:[new File([imgBlob],imgName,{type:'image/png'})]})) }catch(e){} $('#iShare').hidden=!can;
+  $('#iCopy').hidden=!(navigator.clipboard&&window.ClipboardItem);
+}
+async function openImg(){ if(!sel.size){toast('Selecciona las reservas primero.');return} $('#scrim').hidden=false; $('#isheet').hidden=false; try{await buildPayImg()}catch(e){toast('No se pudo generar la imagen.')} }
+function closeImg(){ $('#isheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true }
+$('#imgBtn').onclick=openImg; $('#iClose').onclick=closeImg; $('#iBs').addEventListener('change',buildPayImg);
+$('#iDown').onclick=async()=>{ if(!imgBlob)return; await saveFile(imgName,new Uint8Array(await imgBlob.arrayBuffer())) };
+$('#iShare').onclick=async()=>{ try{ await navigator.share({files:[new File([imgBlob],imgName,{type:'image/png'})],title:imgName}) }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo compartir; usa Descargar.') } };
+$('#iCopy').onclick=async()=>{ try{ await navigator.clipboard.write([new ClipboardItem({'image/png':imgBlob})]); toast('Imagen copiada: pégala en WhatsApp o en el correo') }catch(e){ toast('No se pudo copiar; usa Descargar.') } };
 async function ungroupSelected(){
   const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(r=>r&&r.grupo);
   try{ await setGroup(rs,null); sel.clear(); toast('Reservas separadas del pago compartido.') }catch(e){ toast('No se pudo separar. Inténtalo de nuevo.') }
@@ -1151,7 +1211,7 @@ $('#newBtn').onclick=()=>openSheet(null);
 $('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();render()};
 $('#newHotelBtn').onclick=()=>openHotel(null);
 $('#hClose').onclick=closeHotel; $('#hCancel').onclick=closeHotel; $('#hSave').onclick=saveHotel; $('#hform').addEventListener('submit',e=>{e.preventDefault();saveHotel()});
-$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT();closeK();closeGT()};
+$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT();closeK();closeGT();closeImg()};
 $('#saveBtn').onclick=save; $('#form').addEventListener('submit',e=>{e.preventDefault();save()});
 $('#delBtn').onclick=()=>{$('#delBtn').hidden=true;$('#delConfirm').hidden=false}; $('#delConfirm').onclick=del;
 $('#exportBtn').onclick=exportXlsx;
