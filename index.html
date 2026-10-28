@@ -405,6 +405,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <div class="wrap filters" id="filters">
   <div class="f search"><label for="q">Buscar</label><input id="q" type="search" placeholder="Pasajero, contrato, factura u observación"></div>
+  <div class="f"><label for="fFac">N° de factura</label><input id="fFac" type="search" inputmode="numeric" placeholder="Ej. 752" style="width:140px"></div>
   <div class="f hotelf"><label for="fHotel">Hotel</label><input id="fHotel" type="search" list="dlHotelF" placeholder="Escribe para buscar"></div>
   <div class="f"><label for="fContrato">Contrato</label><select id="fContrato"><option value="">Todos</option></select></div>
   <div class="f"><label for="fStatus">Status</label><select id="fStatus"><option value="">Todos</option></select></div>
@@ -769,8 +770,9 @@ function filtered(){
     if(ft==='stay'){ if(!r.in||!r.out) return false; const last=r.out>r.in?r.out:r.in; return (!fb||r.in<=fb)&&(!fa||last>fa||(r.in===r.out&&r.in>=fa)) }
     const v=r[ft]; return !!v&&(!fa||v>=fa)&&(!fb||v<=fb) };
   const q=$('#q').value.trim().toUpperCase(), h=upN($('#fHotel').value), hx=h&&allHotels()[h]?true:false, c=$('#fContrato').value, s=$('#fStatus').value, m=$('#fMes').value, x=$('#fCruce').checked;
-  const pend=$('#fPend').checked, fr=$('#fRet').value, fns=$('#fNS').value;
-  return rows.filter(r=>inRange(r)&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
+  const pend=$('#fPend').checked, fr=$('#fRet').value, fns=$('#fNS').value, ff=$('#fFac').value.trim().toUpperCase().replace(/^0+(?=\d)/,'');
+  const facHit=r=>[r.factura,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero):[])].filter(Boolean).some(v=>String(v).split(/[\s,;\/]+/).some(t=>t.toUpperCase().replace(/^0+(?=\d)/,'').includes(ff)));
+  return rows.filter(r=>inRange(r)&&(!ff||facHit(r))&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
     (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel,(r.facturas||[]).map(e=>e.numero+' '+e.concepto).join(' ')].some(v=>v&&String(v).toUpperCase().includes(q))));
 }
 
@@ -857,7 +859,7 @@ function renderHotels(list){
   renderFacSearch();
   const g={};
   for(const r of list){const k=upN(r.hotel);const h=g[k]=g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0};h.n++;h.noches+=num(r.noches)||0;h.usd+=r.tusd||0;h.bs+=r.tbs||0;if(r.isPend){h.pend++;h.pu+=r.pusd||0;h.pb+=r.pbs||0;h.pr+=r.pret||0}}
-  const hf=upN($('#fHotel').value), others=$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
+  const hf=upN($('#fHotel').value), others=$('#fFac').value.trim()||$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
   const AH=allHotels();
   const arr=Object.entries(AH).filter(([k])=>(!hf||k.includes(hf))&&(!others||g[k])).map(([k,m])=>[m,g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0}])
     .sort($('#fPend').checked?((a,b)=>b[1].pb-a[1].pb||b[1].pu-a[1].pu||b[1].pend-a[1].pend):((a,b)=>b[1].n-a[1].n||a[0].nombre.localeCompare(b[0].nombre,'es')));
@@ -1227,8 +1229,8 @@ async function exportXlsx(){
 
 /* ---------- events ---------- */
 ['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
-['#q','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'?'input':'change',()=>{page=0;render()}));
-$('#clearBtn').onclick=()=>{$('#q').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
+['#q','#fFac','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'||s==='#fFac'?'input':'change',()=>{page=0;render()}));
+$('#clearBtn').onclick=()=>{$('#q').value='';$('#fFac').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
 $('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k)}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
 $('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
 try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
