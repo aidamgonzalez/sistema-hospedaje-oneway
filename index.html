@@ -974,18 +974,18 @@ async function buildPayImg(){
     put(fmt0.format(tn),'noc',y+23,'c'); put((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),'mon',y+23,'r'); if(showBs) put(fmt2.format(tb),'bs',y+23,'r');
     y+=46+26 }
   g.font=F(400,12); g.fillStyle=MUT; g.fillText('Generado por el Sistema de Hospedaje · One Way Travel Agency',X0,H-24); if(repartido){g.textAlign='right';g.fillText('Pago compartido: monto repartido por tarifa y noches de cada reserva',W-36,H-24);g.textAlign='left'}
-  imgBlob=await new Promise(res=>cv.toBlob(res,'image/png'));
-  const hs=Object.keys(byH); imgName=`PAGO ${hs.length===1?hs[0]:'HOTELES'} ${fd(todayStr()).replace(/\//g,'-')}.png`;
+  imgBlob=await new Promise(res=>cv.toBlob(res,'image/jpeg',0.92));
+  const hs=Object.keys(byH); imgName=`PAGO ${hs.length===1?hs[0]:'HOTELES'} ${fd(todayStr()).replace(/\//g,'-')}.jpg`;
   const pr=$('#iPrev'); if(pr.dataset.u) URL.revokeObjectURL(pr.dataset.u); pr.dataset.u=URL.createObjectURL(imgBlob); pr.src=pr.dataset.u;
-  let can=false; try{ can=!!(navigator.canShare&&navigator.canShare({files:[new File([imgBlob],imgName,{type:'image/png'})]})) }catch(e){} $('#iShare').hidden=!can;
+  let can=false; try{ can=!!(navigator.canShare&&navigator.canShare({files:[new File([imgBlob],imgName,{type:'image/jpeg'})]})) }catch(e){} $('#iShare').hidden=!can;
   $('#iCopy').hidden=!(navigator.clipboard&&window.ClipboardItem);
 }
 async function openImg(){ if(!sel.size){toast('Selecciona las reservas primero.');return} $('#scrim').hidden=false; $('#isheet').hidden=false; try{await buildPayImg()}catch(e){toast('No se pudo generar la imagen.')} }
 function closeImg(){ $('#isheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true }
 $('#imgBtn').onclick=openImg; $('#iClose').onclick=closeImg; $('#iBs').addEventListener('change',buildPayImg);
 $('#iDown').onclick=async()=>{ if(!imgBlob)return; await saveFile(imgName,new Uint8Array(await imgBlob.arrayBuffer())) };
-$('#iShare').onclick=async()=>{ try{ await navigator.share({files:[new File([imgBlob],imgName,{type:'image/png'})],title:imgName}) }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo compartir; usa Descargar.') } };
-$('#iCopy').onclick=async()=>{ try{ await navigator.clipboard.write([new ClipboardItem({'image/png':imgBlob})]); toast('Imagen copiada: pégala en WhatsApp o en el correo') }catch(e){ toast('No se pudo copiar; usa Descargar.') } };
+$('#iShare').onclick=async()=>{ try{ await navigator.share({files:[new File([imgBlob],imgName,{type:'image/jpeg'})],title:imgName}) }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo compartir; usa Descargar.') } };
+$('#iCopy').onclick=async()=>{ try{ const bm=await createImageBitmap(imgBlob), c2=document.createElement('canvas'); c2.width=bm.width; c2.height=bm.height; c2.getContext('2d').drawImage(bm,0,0); const png=await new Promise(res=>c2.toBlob(res,'image/png')); await navigator.clipboard.write([new ClipboardItem({'image/png':png})]); toast('Imagen copiada: pégala en WhatsApp o en el correo') }catch(e){ toast('No se pudo copiar; usa Descargar.') } };
 async function ungroupSelected(){
   const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(r=>r&&r.grupo);
   try{ await setGroup(rs,null); sel.clear(); toast('Reservas separadas del pago compartido.') }catch(e){ toast('No se pudo separar. Inténtalo de nuevo.') }
