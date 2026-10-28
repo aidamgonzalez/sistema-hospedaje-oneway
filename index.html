@@ -249,6 +249,7 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 #gsheet .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}#gsheet .full{grid-column:1/-1}
 .gtlist{margin:0;padding:10px 12px 10px 28px;background:rgba(200,169,106,.12);border-radius:10px;font-size:13px;line-height:1.6}
 .monsel{padding:4px 6px;border-radius:8px;font-size:12.5px}
+.selsum{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;font-variant-numeric:tabular-nums}.selsum b{font-weight:700}.selsum span{white-space:nowrap}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -427,7 +428,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox" id="tblBox"><table id="tbl"><thead></thead><tbody></tbody></table></div>
     <div class="empty" id="empty" hidden><h2 id="emptyTitle">Cargando las reservas…</h2><p id="emptyTxt">En cuanto lleguen los datos aparecen aquí. Para registrar una, usa “+ Nueva reserva”.</p></div>
     <div class="pager" id="pager"></div>
-    <div class="selbar" id="selbar" hidden><b id="selN"></b><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
+    <div class="selbar" id="selbar" hidden><b id="selN"></b><span id="selSum" class="selsum"></span><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
   </section>
   <section id="view-reportes" hidden>
     <div class="rbar">
@@ -663,7 +664,7 @@ let rows=[];        // flattened {id, slug, hotel, ...}
 let year=2026, anios=[2026], unsub=null;
 try{const y=parseInt(localStorage.getItem('hosp-year'));if(y)year=y}catch(e){}
 let sel=new Set(), gsize={}, pendingGroup=null;
-let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
+let curList=[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
 const fmt2=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt0=new Intl.NumberFormat('es-VE');
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -789,7 +790,7 @@ function render(){
   if(view==='hoteles') return renderHotels(list);
   const pages=Math.max(1,Math.ceil(list.length/PAGE)); if(page>=pages) page=pages-1;
   const slice=list.slice(page*PAGE,page*PAGE+PAGE);
-  $('#tbl thead').innerHTML='<tr>'+(canWrite?'<th class="sel" title="Seleccionar para unir pagos"></th>':'')+COLS.map(([key,l,n])=>`<th class="${n?'num':''}" data-k="${key}">${l}${sort.k===key?` <span class="arr">${sort.d>0?'▲':'▼'}</span>`:''}</th>`).join('')+'</tr>';
+  curList=list; $('#tbl thead').innerHTML='<tr>'+(canWrite?`<th class="sel" title="Seleccionar todas las reservas filtradas"><input type="checkbox" id="selAll" aria-label="Seleccionar todas" ${list.length&&list.every(r=>sel.has(r.slug+'|'+r.id))?'checked':''}></th>`:'')+COLS.map(([key,l,n])=>`<th class="${n?'num':''}" data-k="${key}">${l}${sort.k===key?` <span class="arr">${sort.d>0?'▲':'▼'}</span>`:''}</th>`).join('')+'</tr>';
   const html=[];
   for(let i=0;i<slice.length;i++){
     const r=slice[i]; let span=1;
@@ -847,7 +848,10 @@ function renderHotels(list){
 /* ---------- shared payments ---------- */
 function updSel(){ const n=sel.size; $('#selbar').hidden=!n||view!=='reservas'; $('#selN').textContent=n===1?'1 reserva seleccionada':n+' reservas seleccionadas';
   const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean);
-  $('#grpBtn').disabled=n<2; $('#ungrpBtn').disabled=!rs.some(r=>r.grupo); }
+  $('#grpBtn').disabled=n<2; $('#ungrpBtn').disabled=!rs.some(r=>r.grupo);
+  const S=(f,pred)=>rs.filter(pred||(()=>true)).reduce((a,r)=>a+(num(r[f])||0),0), E=r=>r.moneda==='EUR', U=r=>r.moneda!=='EUR';
+  const nN=S('noches'), u=S('tusd',U), e=S('tusd',E), b=S('tbs'), pu=S('pusd',U), pe=S('pusd',E), pb=S('pbs'), np=rs.filter(r=>r.isPend).length;
+  $('#selSum').innerHTML=n?[`<span>Noches: <b>${fmt0.format(nN)}</b></span>`,`<span>Total: <b>$ ${fmt2.format(u)}</b>${e?` · <b>€ ${fmt2.format(e)}</b>`:''} · <b>Bs ${fmt2.format(b)}</b></span>`,np?`<span>Por pagar (${np}): <b>$ ${fmt2.format(pu)}</b>${pe?` · <b>€ ${fmt2.format(pe)}</b>`:''} · <b>Bs ${fmt2.format(pb)}</b></span>`:''].join(''):''; }
 async function setGroup(targets,gid){ // targets: [{slug,id}]
   const by={}; for(const t of targets)(by[t.slug]=by[t.slug]||{})[t.id]={grupo:gid};
   for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs});
@@ -1136,7 +1140,7 @@ async function exportXlsx(){
 ['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
 ['#q','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'?'input':'change',()=>{page=0;render()}));
 $('#clearBtn').onclick=()=>{$('#q').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
-$('#tbl thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th)return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
+$('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k)}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
 $('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
 try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
 $('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k);updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
