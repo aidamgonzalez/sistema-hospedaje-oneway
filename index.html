@@ -933,7 +933,7 @@ async function buildPayImg(){
   const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
   const tk=v=>String(v||'').split(/[\s,;\/]+/).map(t=>t.trim()).filter(Boolean);
   const fac1=r=>{ let own=tk(r.factura);
-    if(r.grupo&&own.length>1){ const oth=new Set(rows.filter(x=>x!==r&&upN(x.hotel)===upN(r.hotel)).flatMap(x=>tk(x.factura).length===1?tk(x.factura):[])); const k=own.filter(t=>!oth.has(t)); if(k.length) own=k; }
+    if(own.length>1){ const oth=new Set(rows.filter(x=>x!==r&&upN(x.hotel)===upN(r.hotel)).flatMap(x=>tk(x.factura).length===1?tk(x.factura):[])); const k=own.filter(t=>!oth.has(t)); if(k.length) own=k; }
     return [...own,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero).filter(Boolean).map(String):[])] };
   const facOf=r=>{let L=fac1(r);if(!L.length&&r.grupo){const G=[...new Set(rows.filter(x=>x.grupo===r.grupo).flatMap(fac1))];if(G.length===1)L=G}return L.join(', ')};
   const hasF=rs.some(r=>facOf(r));
