@@ -642,7 +642,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="f"><label for="gtBs">Monto total Bs</label><input id="gtBs" type="number" step="0.01" min="0"></div>
       <div class="f"><label for="gtBcv">Tasa BCV</label><input id="gtBcv" type="number" step="0.01" min="0"></div>
       <div class="f"><label for="gtUsd" id="gtLblUsd">Monto total $</label><input id="gtUsd" type="number" step="0.01" min="0"><span class="hint">El último que escribas manda: $ × tasa = Bs · Bs ÷ tasa = $</span></div>
-      <div class="f"><label for="gtFac">Factura</label><input id="gtFac" placeholder="Opcional"></div>
+      <div class="f"><label for="gtFac">Factura</label><input id="gtFac" placeholder="Opcional"><span class="hint">Solo se coloca en las reservas que no tienen factura</span></div>
       <div class="f full"><label for="gtSt">Status de pago para todas</label><input id="gtSt" list="dlStatus" placeholder="Dejar igual"></div>
     </div>
     <p class="hint" id="gtMsg"></p>
@@ -901,7 +901,7 @@ function openGTotal(mem,fromSheet){
   const fp=gtMem.map(r=>r.fecha_pago).find(Boolean); $('#gtFecha').value=fp||todayStr(); $('#gtFH').textContent='';
   gtBase=null; $('#gtBs').value=sb?Math.round(sb*100)/100:''; $('#gtBcv').value=bcv??''; $('#gtUsd').value=su?Math.round(su*100)/100:'';
   if(!bcv) gtTasa(false); else gtTasaHint();
-  $('#gtFac').value=[...new Set(gtMem.map(r=>r.factura).filter(Boolean))].join(', '); $('#gtSt').value='';
+  $('#gtFac').value=[...new Set(gtMem.map(r=>r.factura).filter(Boolean))].join(', '); $('#gtFac').dataset.ini=$('#gtFac').value; $('#gtSt').value='';
   $('#gtMsg').textContent=gtMem.filter(r=>num(r.bs)!=null||num(r.usd)!=null).length>1?'Estas reservas ya tenían montos por separado; abajo ves la suma. Si colocas el total, reemplaza esos montos.':'';
   $('#scrim').hidden=false; $('#gsheet').hidden=false; setTimeout(()=>$('#gtBs').focus(),50);
 }
@@ -920,7 +920,7 @@ $('#gtSave').onclick=async()=>{
   if(bs==null&&usd==null){ toast('Coloca el monto total en Bs o en $.'); $('#gtBs').focus(); return }
   const now=new Date().toISOString(), by={};
   gtMem.forEach((r,i)=>{ const u=i===0?{usd:usd??(bs!=null&&bcv?Math.round(bs/bcv*100)/100:null),bs:bs??(usd!=null&&bcv?Math.round(usd*bcv*100)/100:null),bcv:bcv??null}:{usd:null,bs:null};
-    if(fac) u.factura=i===0?fac:(r.factura||null); if(st) u.status=st; u.fecha_pago=fpago; u.editado=now; (by[r.slug]=by[r.slug]||{})[r.id]=u });
+    if(fac&&fac!==$('#gtFac').dataset.ini&&!r.factura) u.factura=fac; if(st) u.status=st; u.fecha_pago=fpago; u.editado=now; (by[r.slug]=by[r.slug]||{})[r.id]=u });
   try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`Monto total guardado para ${gtMem.length} reservas.`); closeGT(); if(gtFromSheet) closeSheet() }
   catch(e){ toast('No se pudo guardar el monto. Inténtalo de nuevo.') }
 };
@@ -931,8 +931,11 @@ async function buildPayImg(){
   const showBs=$('#iBs').checked, byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
   const X0=36, S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
   const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
-  const fac1=r=>[r.factura,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero):[])].filter(Boolean).map(String);
-  const facOf=r=>{let L=fac1(r);if(!L.length&&r.grupo)L=[...new Set(rows.filter(x=>x.grupo===r.grupo).flatMap(fac1))];return L.join(', ')};
+  const tk=v=>String(v||'').split(/[\s,;\/]+/).map(t=>t.trim()).filter(Boolean);
+  const fac1=r=>{ let own=tk(r.factura);
+    if(r.grupo&&own.length>1){ const oth=new Set(rows.filter(x=>x!==r&&upN(x.hotel)===upN(r.hotel)).flatMap(x=>tk(x.factura).length===1?tk(x.factura):[])); const k=own.filter(t=>!oth.has(t)); if(k.length) own=k; }
+    return [...own,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero).filter(Boolean).map(String):[])] };
+  const facOf=r=>{let L=fac1(r);if(!L.length&&r.grupo){const G=[...new Set(rows.filter(x=>x.grupo===r.grupo).flatMap(fac1))];if(G.length===1)L=G}return L.join(', ')};
   const hasF=rs.some(r=>facOf(r));
   const C=[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
   if(hasF) C.push(['fac','Factura',118,'c']); C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',140,'r']);
