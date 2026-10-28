@@ -625,12 +625,12 @@ html,body{max-width:100%;overflow-x:hidden}
 </aside>
 <aside class="sheet" id="isheet" hidden aria-labelledby="iTitle">
   <header><h2 id="iTitle">Imagen para el hotel</h2><button class="ghost" id="iClose" type="button" aria-label="Cerrar">✕</button></header>
-  <div style="display:flex;flex-direction:column;gap:12px;padding-bottom:12px">
+  <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:12px;padding:16px 20px">
     <label class="check"><input type="checkbox" id="iBs"> Mostrar también el monto en Bs</label>
+    <p class="hint" style="margin:0">Revisa la imagen antes de enviarla. Se genera con las reservas que tienes seleccionadas.</p>
     <img id="iPrev" alt="Vista previa de la relación de pago" style="width:100%;border:1px solid var(--line);border-radius:10px;background:#fff">
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="iDown" type="button">Descargar imagen</button><button id="iShare" type="button" hidden>Compartir (WhatsApp…)</button><button id="iCopy" type="button" hidden>Copiar imagen</button></div>
-    <p class="hint">Revisa la imagen antes de enviarla. Se genera con las reservas que tienes seleccionadas.</p>
   </div>
+  <footer><button class="primary" id="iDown" type="button">Descargar imagen</button><button id="iShare" type="button" hidden>Compartir (WhatsApp…)</button><button id="iCopy" type="button" hidden>Copiar imagen</button></footer>
 </aside>
 <aside class="sheet" id="gsheet" hidden aria-labelledby="gTitle">
   <header><h2 id="gTitle">Monto total del pago</h2><button class="ghost" id="gtClose" type="button" aria-label="Cerrar">✕</button></header>
@@ -944,13 +944,13 @@ async function buildPayImg(){
   for(const gid of new Set(rs.filter(r=>r.grupo).map(r=>r.grupo))){ const M=rows.filter(x=>x.grupo===gid); const TU=M.reduce((a,x)=>a+(x.tusd||0),0), TB=M.reduce((a,x)=>a+(x.tbs||0),0);
     const allT=M.every(x=>num(x.tarifa)&&num(x.noches)); const w=x=>allT?x.tarifa*x.noches:(num(x.noches)||1); const SW=M.reduce((a,x)=>a+w(x),0)||1;
     for(const x of M){ share.set(x,TU?Math.round(TU*w(x)/SW*100)/100:null); shareB.set(x,TB?Math.round(TB*w(x)/SW*100)/100:null) } if(M.length>1) repartido=true }
-  const uOf=r=>share.has(r)?share.get(r):(r.tusd!=null?r.tusd:(num(r.tarifa)&&num(r.noches)?r.tarifa*r.noches:null));
+  const uOf=r=>share.has(r)?share.get(r):(r.tusd!=null?r.tusd:(r.tbs!=null&&num(r.bcv)?Math.round(r.tbs/r.bcv*100)/100:(num(r.tarifa)&&num(r.noches)?r.tarifa*r.noches:null)));
   const bOf=r=>shareB.has(r)?shareB.get(r):r.tbs;
   const amt=r=>{const v=uOf(r);if(v==null)return '—';return (r.moneda==='EUR'?'€ ':'$ ')+fmt2.format(v)};
   // measure
   let H=150; const plan=[];
   for(const [h,L] of Object.entries(byH)){ const rws=L.map(r=>{const lines=wrap(r.pasajero,wOf('pax')-16,F(600,17)), fl=hasF?wrap(facOf(r).replace(/,\s*/g,', '),wOf('fac')-12,F(400,14)):[''];return {r,lines,fl,h:Math.max(40,lines.length*22+18,fl.length*18+18)}}); plan.push({h,rws}); H+=56+40+rws.reduce((a,x)=>a+x.h,0)+46+26 }
-  H+=50; cv.width=W*S; cv.height=H*S; g.scale(S,S);
+  H+=50; const SS=Math.min(S,Math.sqrt(16e6/(W*H)),32000/H); cv.width=Math.floor(W*SS); cv.height=Math.floor(H*SS); g.scale(SS,SS);
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
   g.fillStyle=NAVY; g.fillRect(0,0,W,104); g.fillStyle=SAND; g.fillRect(0,104,W,5);
   g.textBaseline='middle'; g.font=F(800,36); g.fillStyle=SAND; g.fillText('ONE',36,52); const ow=g.measureText('ONE').width; g.fillStyle='#fff'; g.fillText('WAY',36+ow,52);
