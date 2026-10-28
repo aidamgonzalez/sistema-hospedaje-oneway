@@ -909,9 +909,14 @@ function selRows(){return [...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).fil
 async function buildPayImg(){
   const rs=selRows().sort((a,b)=>a.hotel.localeCompare(b.hotel,'es')||(a.in||'').localeCompare(b.in||'')||String(a.pasajero||'').localeCompare(String(b.pasajero||''),'es'));
   const showBs=$('#iBs').checked, byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
-  const S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
+  const X0=36, S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
   const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
-  const cols=showBs?[['N°',44,'c'],['Pasajero',306,'l'],['Check-in',110,'c'],['Check-out',110,'c'],['Noches',78,'c'],['ML',130,'r'],['Monto Bs',150,'r']]:[['N°',50,'c'],['Pasajero',398,'l'],['Check-in',120,'c'],['Check-out',120,'c'],['Noches',90,'c'],['ML',150,'r']]; cols.forEach(c=>{if(c[0]==='ML')c[0]=ML});
+  const fac1=r=>[r.factura,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero):[])].filter(Boolean).map(String);
+  const facOf=r=>{let L=fac1(r);if(!L.length&&r.grupo)L=[...new Set(rows.filter(x=>x.grupo===r.grupo).flatMap(fac1))];return L.join(', ')};
+  const hasF=rs.some(r=>facOf(r));
+  const C=[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
+  if(hasF) C.push(['fac','Factura',118,'c']); C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',140,'r']);
+  C[1][2]=928-C.reduce((a,c)=>a+c[2],0); const cols=C.map(c=>[c[1],c[2],c[3],c[0]]), ix=k=>cols.findIndex(c=>c[3]===k), xOf=k=>X0+cols.slice(0,ix(k)).reduce((a,c)=>a+c[1],0), wOf=k=>cols[ix(k)][1];
   const cv=document.createElement('canvas'), g=cv.getContext('2d'), F=(w,sz)=>`${w} ${sz}px system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
   const wrap=(t,mw,font)=>{g.font=font;const out=[];let line='';for(const w of String(t||'').split(/\s+/)){const tst=line?line+' '+w:w;if(g.measureText(tst).width>mw&&line){out.push(line);line=w}else line=tst}if(line)out.push(line);return out.length?out:['']};
   // Monto por pasajero: en un pago compartido el total se reparte entre las reservas (por tarifa × noches o, si no hay tarifa, por noches).
@@ -924,30 +929,29 @@ async function buildPayImg(){
   const amt=r=>{const v=uOf(r);if(v==null)return '—';return (r.moneda==='EUR'?'€ ':'$ ')+fmt2.format(v)};
   // measure
   let H=150; const plan=[];
-  for(const [h,L] of Object.entries(byH)){ const rws=L.map(r=>{const lines=wrap(r.pasajero,cols[1][1]-16,F(500,17));return {r,lines,h:Math.max(40,lines.length*22+18)}}); plan.push({h,rws}); H+=56+40+rws.reduce((a,x)=>a+x.h,0)+46+26 }
+  for(const [h,L] of Object.entries(byH)){ const rws=L.map(r=>{const lines=wrap(r.pasajero,wOf('pax')-16,F(600,17)), fl=hasF?wrap(facOf(r).replace(/,\s*/g,', '),wOf('fac')-12,F(400,14)):[''];return {r,lines,fl,h:Math.max(40,lines.length*22+18,fl.length*18+18)}}); plan.push({h,rws}); H+=56+40+rws.reduce((a,x)=>a+x.h,0)+46+26 }
   H+=50; cv.width=W*S; cv.height=H*S; g.scale(S,S);
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
   g.fillStyle=NAVY; g.fillRect(0,0,W,104); g.fillStyle=SAND; g.fillRect(0,104,W,5);
   g.textBaseline='middle'; g.font=F(800,36); g.fillStyle=SAND; g.fillText('ONE',36,52); const ow=g.measureText('ONE').width; g.fillStyle='#fff'; g.fillText('WAY',36+ow,52);
   g.font=F(400,13); g.fillStyle='#cfd8e2'; g.fillText('TRAVEL AGENCY',38,82);
   g.textAlign='right'; g.font=F(700,22); g.fillStyle='#fff'; g.fillText('RELACIÓN DE RESERVAS A PAGAR',W-36,44); g.font=F(400,15); g.fillStyle='#cfd8e2'; g.fillText('Fecha: '+fd(todayStr()),W-36,72); g.textAlign='left';
-  let y=140; const X0=36, TW=W-72;
+  let y=140; const TW=W-72;
+  const put=(t,k,yy,a)=>{const x=xOf(k),w=wOf(k);g.textAlign=a==='c'?'center':a==='r'?'right':'left';g.fillText(t,a==='c'?x+w/2:a==='r'?x+w-10:x+10,yy);g.textAlign='left'};
   for(const {h,rws} of plan){
     g.font=F(800,21); g.fillStyle=NAVY; g.fillText(h,X0,y+18); y+=48;
-    g.fillStyle=NAVY; g.fillRect(X0,y,TW,38); let x=X0; g.font=F(700,14); g.fillStyle='#fff';
-    for(const [l,w,a] of cols){ g.textAlign=a==='c'?'center':a==='r'?'right':'left'; g.fillText(l.toUpperCase(),a==='c'?x+w/2:a==='r'?x+w-10:x+10,y+19); x+=w } y+=38; g.textAlign='left';
+    g.fillStyle=NAVY; g.fillRect(X0,y,TW,38); g.font=F(700,14); g.fillStyle='#fff';
+    for(const [l,w,a,k] of cols) put(l.toUpperCase(),k,y+19,a); y+=38;
     let tn=0,tu=0,te=0,tb=0;
-    rws.forEach(({r,lines,h:rh},i)=>{ g.fillStyle=i%2?'#faf6ef':'#fff'; g.fillRect(X0,y,TW,rh); g.fillStyle=LINE; g.fillRect(X0,y+rh-1,TW,1);
-      const vals=[String(i+1),null,fd(r.in),fd(r.out),r.noches!=null?String(r.noches):'',amt(r)]; if(showBs) vals.push(bOf(r)!=null?fmt2.format(bOf(r)):'—');
-      let x=X0; cols.forEach(([l,w,a],k)=>{ g.fillStyle=k===5&&vals[5].startsWith('incl')?MUT:INK; g.font=F(k===1?600:k===5?700:400,k===5&&vals[5].startsWith('incl')?13:16);
-        if(k===1){ g.font=F(600,17); lines.forEach((ln,j)=>g.fillText(ln,x+10,y+rh/2-(lines.length-1)*11+j*22)) }
-        else { g.textAlign=a==='c'?'center':a==='r'?'right':'left'; g.fillText(vals[k],a==='c'?x+w/2:a==='r'?x+w-10:x+10,y+rh/2); g.textAlign='left' }
-        x+=w });
+    rws.forEach(({r,lines,fl,h:rh},i)=>{ g.fillStyle=i%2?'#faf6ef':'#fff'; g.fillRect(X0,y,TW,rh); g.fillStyle=LINE; g.fillRect(X0,y+rh-1,TW,1); const cy=y+rh/2;
+      g.fillStyle=INK; g.font=F(400,16); put(String(i+1),'n',cy,'c'); put(fd(r.in),'in',cy,'c'); put(fd(r.out),'out',cy,'c'); put(r.noches!=null?String(r.noches):'','noc',cy,'c');
+      g.font=F(600,17); lines.forEach((ln,j)=>g.fillText(ln,xOf('pax')+10,cy-(lines.length-1)*11+j*22));
+      if(hasF){ g.font=F(500,15); g.fillStyle=INK; fl.forEach((ln,j)=>put(ln,'fac',cy-(fl.length-1)*9+j*18,'c')); g.fillStyle=INK }
+      g.font=F(700,16); put(amt(r),'mon',cy,'r'); if(showBs){ g.font=F(400,16); put(bOf(r)!=null?fmt2.format(bOf(r)):'—','bs',cy,'r') }
       tn+=num(r.noches)||0; if(r.moneda==='EUR')te+=uOf(r)||0; else tu+=uOf(r)||0; tb+=bOf(r)||0; y+=rh });
     g.fillStyle='#f1e7d6'; g.fillRect(X0,y,TW,46); g.fillStyle=SAND; g.fillRect(X0,y,TW,2);
     g.font=F(800,17); g.fillStyle=NAVY; g.fillText(`TOTAL · ${rws.length} reserva${rws.length>1?'s':''}`,X0+10,y+23);
-    let xt=X0+cols.slice(0,4).reduce((a,c)=>a+c[1],0); g.textAlign='center'; g.fillText(fmt0.format(tn),xt+cols[4][1]/2,y+23); xt+=cols[4][1];
-    g.textAlign='right'; g.fillText((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),xt+cols[5][1]-10,y+23); if(showBs){xt+=cols[5][1];g.fillText(fmt2.format(tb),xt+cols[6][1]-10,y+23)} g.textAlign='left';
+    put(fmt0.format(tn),'noc',y+23,'c'); put((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),'mon',y+23,'r'); if(showBs) put(fmt2.format(tb),'bs',y+23,'r');
     y+=46+26 }
   g.font=F(400,12); g.fillStyle=MUT; g.fillText('Generado por el Sistema de Hospedaje · One Way Travel Agency',X0,H-24); if(repartido){g.textAlign='right';g.fillText('Pago compartido: monto repartido por tarifa y noches de cada reserva',W-36,H-24);g.textAlign='left'}
   imgBlob=await new Promise(res=>cv.toBlob(res,'image/png'));
