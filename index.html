@@ -250,6 +250,7 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .gtlist{margin:0;padding:10px 12px 10px 28px;background:rgba(200,169,106,.12);border-radius:10px;font-size:13px;line-height:1.6}
 .monsel{padding:4px 6px;border-radius:8px;font-size:12.5px}
 .selsum{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;font-variant-numeric:tabular-nums}.selsum b{font-weight:700}.selsum span{white-space:nowrap}
+.facsearch{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:12px}.facsearch .f{min-width:240px}#hFacTbl tbody tr{cursor:pointer}#hFacTbl mark{background:#f3dfb6;color:inherit;border-radius:3px;padding:0 2px}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -504,6 +505,8 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>Reserva en hospedaje</th><th>Lo que está facturado</th><th>Qué revisar</th></tr></thead><tbody></tbody></table></div>
   </section>
   <section id="view-hoteles" hidden>
+    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span></div>
+    <div class="tablebox" id="hFacBox" hidden style="margin-bottom:16px"><table id="hFacTbl"><thead><tr><th>Factura</th><th>Hotel</th><th>Contrato</th><th>Pasajero</th><th>Check-in</th><th>Check-out</th><th class="num">Noches</th><th>Status</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th></tr></thead><tbody></tbody></table></div>
     <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
   </section>
 </main>
@@ -836,7 +839,22 @@ function render(){
     <span style="display:flex;gap:8px"><button type="button" id="prev" ${page?'':'disabled'}>← Anterior</button><button type="button" id="next" ${page<pages-1?'':'disabled'}>Siguiente →</button></span>`:'';
   $('#prev')&&($('#prev').onclick=()=>{page--;render();$('#tblBox').scrollTop=0}); $('#next')&&($('#next').onclick=()=>{page++;render();$('#tblBox').scrollTop=0});
 }
+function renderFacSearch(){
+  const q=$('#hFac').value.trim().toUpperCase().replace(/^0+(?=\d)/,''); const box=$('#hFacBox');
+  if(!q){box.hidden=true;$('#hFacN').textContent='';return}
+  const nrm=v=>String(v||'').toUpperCase().replace(/^0+(?=\d)/,'');
+  const hits=[]; for(const r of rows){ const L=[r.factura?{n:r.factura,c:'Habitación'}:null,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero?{n:e.numero,c:e.concepto||'Adicional'}:null):[])].filter(Boolean);
+    const m=L.filter(f=>String(f.n).split(/[\s,;\/]+/).some(t=>nrm(t).includes(q))); if(m.length) hits.push({r,m}) }
+  hits.sort((a,b)=>(a.r.in||'').localeCompare(b.r.in||''));
+  const hl=t=>esc(t).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),x=>`<mark>${x}</mark>`);
+  $('#hFacN').textContent=hits.length?`${hits.length} reserva${hits.length>1?'s':''} con esa factura en ${year}`:`No hay reservas con esa factura en ${year}`;
+  box.hidden=!hits.length;
+  $('#hFacTbl tbody').innerHTML=hits.map(({r,m})=>`<tr data-id="${esc(r.slug+'|'+r.id)}"><td>${m.map(f=>`<b>${hl(f.n)}</b>${f.c!=='Habitación'?` <span class="mut">${esc(f.c)}</span>`:''}`).join('<br>')}</td><td class="hotel">${esc(r.hotel)}</td><td>${esc(r.contrato||'')}</td><td class="pax">${esc(r.pasajero||'')}</td><td>${fd(r.in)}</td><td>${fd(r.out)}</td><td class="num">${r.noches??''}</td><td>${r.status?`<span class="chip ${chipClass(r.status)}">${esc(r.status)}</span>`:''}</td><td class="num">${r.tusd!=null?(r.moneda==='EUR'?'€ ':'')+fmt2.format(r.tusd):''}</td><td class="num">${r.tbs!=null?fmt2.format(r.tbs):''}</td></tr>`).join('');
+}
+$('#hFac').addEventListener('input',renderFacSearch);
+$('#hFacTbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const [sl,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===sl&&x.id===id);if(r)openSheet(r)});
 function renderHotels(list){
+  renderFacSearch();
   const g={};
   for(const r of list){const k=upN(r.hotel);const h=g[k]=g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0};h.n++;h.noches+=num(r.noches)||0;h.usd+=r.tusd||0;h.bs+=r.tbs||0;if(r.isPend){h.pend++;h.pu+=r.pusd||0;h.pb+=r.pbs||0;h.pr+=r.pret||0}}
   const hf=upN($('#fHotel').value), others=$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
