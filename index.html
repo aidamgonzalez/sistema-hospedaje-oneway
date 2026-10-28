@@ -222,6 +222,7 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 #tblH th:first-child{background:var(--surface-2);z-index:2}
 .xrow{position:relative;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 8px;align-items:end;background:var(--surface-2);border-radius:8px;padding:10px 36px 10px 10px;margin-bottom:8px;border-left:3px solid var(--sand)}
 .xrow .f label{font-size:10px}.xrow input,.xrow select{width:100%;padding:6px 8px}
+.arow{grid-template-columns:1.2fr .8fr 1fr;border-left-color:var(--ok,#2e7d5b)}@media(max-width:640px){.arow{grid-template-columns:1fr 1fr}}
 .xrow .xdel{position:absolute;top:6px;right:4px;padding:4px 8px;color:var(--bad);border-color:transparent;background:none}
 @media (max-width:640px){.xrow{grid-template-columns:1fr 1fr}}
 .xsub{display:block;font-size:11px;color:var(--muted);white-space:nowrap}
@@ -538,6 +539,10 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f"><label for="ePresu">Presupuesto</label><input id="ePresu"></div>
     <div class="f"><label for="eMesFact">Mes de facturación</label><input id="eMesFact" type="month" placeholder="AAAA-MM"><span class="hint" id="eMesFactH">Vacío = mes de entrada</span></div>
     <div class="retbox full" id="retBox"><label class="check"><input type="checkbox" id="eRetOk"> <b>Retención lista</b> de esta factura</label><div class="f"><label for="eRetComp">N° comprobante de retención</label><input id="eRetComp" placeholder="Opcional"></div></div>
+    <div class="sec">Abonos <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">pagos parciales de esta reserva (ej. solo la primera noche)</span></div>
+    <div class="full" id="aList"></div>
+    <button type="button" id="aAdd" class="full">+ Registrar abono</button>
+    <p class="hint full" id="aTot"></p>
     <div class="sec">Facturas adicionales <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">comidas, consumos, lavandería…</span></div>
     <div class="full" id="xList"></div>
     <button type="button" id="xAdd" class="full">+ Agregar factura adicional</button>
@@ -669,7 +674,7 @@ function slug(s){return s.normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^A-
 const col=()=>db.collection('hoteles-'+year);
 function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
 function setSync(state,txt){$('#dot').className='dot '+(state||'');$('#syncTxt').textContent=txt}
-function chipClass(s){s=(s||'').toUpperCase();if(s.startsWith('PAGADO'))return'ok';if(s.includes('NO SHOW'))return'bad';if(s.startsWith('POR PAGAR')||s.startsWith('PENDIENTE'))return'warn';if(s.startsWith('COMPLEMENT'))return'info';return''}
+function chipClass(s){s=(s||'').toUpperCase();if(s.startsWith('PAGADO'))return'ok';if(s.includes('NO SHOW'))return'bad';if(s.startsWith('POR PAGAR')||s.startsWith('PENDIENTE')||s.startsWith('PAGO PARCIAL'))return'warn';if(s.startsWith('COMPLEMENT'))return'info';return''}
 
 /* ---------- retenciones ---------- */
 const IVA=0.16;
@@ -717,11 +722,13 @@ function rebuild(){
   gsize={}; for(const r of out) if(r.grupo) gsize[r.grupo]=(gsize[r.grupo]||0)+1;
   for(const r of out) if(r.grupo&&gsize[r.grupo]<2) r.grupo=null;
   const AHr=allHotels(); for(const r of out){
-    const X=Array.isArray(r.facturas)?r.facturas:[], mp=(r.status||'').toUpperCase().startsWith('POR PAGAR');
+    const X=Array.isArray(r.facturas)?r.facturas:[], stU=(r.status||'').toUpperCase(), mp=stU.startsWith('POR PAGAR')||stU.startsWith('PAGO PARCIAL');
+    const AB=Array.isArray(r.abonos)?r.abonos:[]; r.abU=AB.length?AB.reduce((a,e)=>a+(num(e.usd)||0),0):null; r.abN=AB.reduce((a,e)=>a+(num(e.noches)||0),0);
+    const mU=num(r.usd)!=null?Math.max(0,Math.round((r.usd-(r.abU||0))*100)/100):null, mB=num(r.bs)!=null?(r.abU&&num(r.bcv)&&mU!=null?Math.round(mU*r.bcv*100)/100:Math.max(0,r.bs-AB.reduce((a,e)=>a+(num(e.bs)||0),0))):null; r.remU=AB.length?mU:null;
     const sU=X.reduce((a,e)=>a+(num(e.usd)||0),0), sB=X.reduce((a,e)=>a+(num(e.bs)||0),0);
     r.tusd=num(r.usd)!=null||sU?(num(r.usd)||0)+sU:null; r.tbs=num(r.bs)!=null||sB?(num(r.bs)||0)+sB:null;
     const XP=X.filter(e=>(e.status||'POR PAGAR')==='POR PAGAR');
-    const pU=(mp?num(r.usd)||0:0)+XP.reduce((a,e)=>a+(num(e.usd)||0),0), pB=(mp?num(r.bs)||0:0)+XP.reduce((a,e)=>a+(num(e.bs)||0),0);
+    const pU=(mp?mU||0:0)+XP.reduce((a,e)=>a+(num(e.usd)||0),0), pB=(mp?mB||0:0)+XP.reduce((a,e)=>a+(num(e.bs)||0),0);
     r.isPend=mp||XP.length>0; r.pusd=(mp&&num(r.usd)!=null)||XP.some(e=>num(e.usd)!=null)?pU:null; r.pbs=(mp&&num(r.bs)!=null)||XP.some(e=>num(e.bs)!=null)?pB:null;
     const pc=AHr[upN(r.hotel)]?.retencion; r.ret=r.tbs!=null&&pc?retOf(r.tbs,pc):null; r.pret=r.pbs!=null&&pc?retOf(r.pbs,pc):0;
     const RP=[]; if(num(r.bs)) RP.push(!!r.ret_ok); X.forEach(e=>{if(num(e.bs)) RP.push(!!e.ret_ok)});
@@ -798,7 +805,7 @@ function render(){
           const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span></td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(sb-gr)}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
         } else {
           const empty=num(x.usd)==null&&num(x.bs)==null&&x.grupo;
-          const XX=x.facturas||[]; money=`<td class="num">${num(x.usd)!=null?(x.moneda==='EUR'?'€ ':'')+fmt2.format(x.usd):(empty?'<span class="mut">pago compartido</span>':'')}${XX.length?`<span class="xsub">+${XX.length} fact. · total ${fmt2.format(x.tusd||0)}</span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs?`<span class="xsub">total ${fmt2.format(x.tbs)}</span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(x.tbs-rr)}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
+          const XX=x.facturas||[]; money=`<td class="num">${num(x.usd)!=null?(x.moneda==='EUR'?'€ ':'')+fmt2.format(x.usd):(empty?'<span class="mut">pago compartido</span>':'')}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}${XX.length?`<span class="xsub">+${XX.length} fact. · total ${fmt2.format(x.tusd||0)}</span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs?`<span class="xsub">total ${fmt2.format(x.tbs)}</span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(x.tbs-rr)}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
         }
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
@@ -941,7 +948,7 @@ function openSheet(r,pre){
   F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||'';
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
   $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
-  $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot();
+  $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot(); $('#aList').innerHTML=''; (r?.abonos||[]).forEach(e=>aRow(e)); aTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
   $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
@@ -1020,6 +1027,29 @@ function xTot(){const X=xRead();const el=$('#xTot');if(!X.length){el.textContent
   const u=(parseFloat(F.eUsd.value)||0)+X.reduce((a,e)=>a+(e.usd||0),0), b=(parseFloat(F.eBs.value)||0)+X.reduce((a,e)=>a+(e.bs||0),0);
   const pu=X.filter(e=>e.status==='POR PAGAR').reduce((a,e)=>a+(e.usd||0),0);
   el.innerHTML=`Total de la reserva (habitación + ${X.length} adicional${X.length>1?'es':''}): <b>${fmt2.format(u)}</b> · Bs <b>${fmt2.format(b)}</b>${pu?` · adicionales por pagar: ${fmt2.format(pu)}`:''}`}
+function aRow(e){e=e||{};const d=document.createElement('div');d.className='xrow arow';
+  d.innerHTML=`<div class="f"><label>Fecha del pago</label><input class="af" type="date" value="${esc(e.fecha||'')}"></div>
+  <div class="f"><label>Noches</label><input class="an" type="number" step="1" min="0" value="${e.noches??''}"></div>
+  <div class="f"><label>Monto</label><input class="au" type="number" step="0.01" value="${e.usd??''}"></div>
+  <div class="f"><label>Tasa BCV</label><input class="at" type="number" step="0.01" value="${e.bcv??''}"></div>
+  <div class="f"><label>Bs</label><input class="ab" type="number" step="0.01" value="${e.bs??''}"></div>
+  <button type="button" class="xdel" aria-label="Quitar abono">✕</button>`;
+  const f=d.querySelector('.af'),n=d.querySelector('.an'),u=d.querySelector('.au'),t=d.querySelector('.at'),b=d.querySelector('.ab'); let base=null;
+  const calc=()=>{const U=parseFloat(u.value),T=parseFloat(t.value),B=parseFloat(b.value);if(!(T>0))return;if((base||(b.value?'bs':'usd'))==='bs'){if(B>0)u.value=(B/T).toFixed(2)}else if(U>0)b.value=(U*T).toFixed(2)};
+  const rate=()=>{const m=allHotels()[upN(F.eHotel.value)]?.moneda||'USD';const r=f.value?tasaFor(f.value,m):null;if(r){t.value=r.v;calc()}};
+  if(!e.fecha){f.value=todayStr();if(e.bcv==null)rate()}
+  f.addEventListener('change',()=>{rate();aTot()});
+  n.addEventListener('input',()=>{const N=parseFloat(n.value),tot=parseFloat(F.eUsd.value),nn=parseFloat(F.eNoches.value);if(N>0&&tot>0&&nn>0){u.value=(tot/nn*N).toFixed(2);base='usd';calc()}aTot()});
+  u.addEventListener('input',()=>{base='usd';calc();aTot()});b.addEventListener('input',()=>{base='bs';calc();aTot()});t.addEventListener('input',()=>{calc();aTot()});
+  d.querySelector('.xdel').onclick=()=>{d.remove();aTot()};
+  $('#aList').appendChild(d); return d}
+function aRead(){return [...document.querySelectorAll('#aList .arow')].map(d=>{const v=c=>d.querySelector(c).value.trim();const n=c=>{const x=parseFloat(v(c));return isFinite(x)?Math.round(x*100)/100:null};
+  return {fecha:v('.af')||null,noches:n('.an'),usd:n('.au'),bcv:n('.at'),bs:n('.ab')}}).filter(e=>e.usd!=null||e.bs!=null)}
+function aTot(){const A=aRead(),el=$('#aTot');if(!A.length){el.textContent='';return}
+  const tot=parseFloat(F.eUsd.value), nn=parseFloat(F.eNoches.value), pu=A.reduce((s,e)=>s+(e.usd||0),0), pn=A.reduce((s,e)=>s+(e.noches||0),0), cur=allHotels()[upN(F.eHotel.value)]?.moneda==='EUR'?'€ ':'$ ';
+  el.innerHTML=`Abonado: <b>${cur}${fmt2.format(pu)}</b>${pn?` (${pn} de ${nn||'?'} noches)`:''}`+(tot>0?` · Falta por pagar: <b>${cur}${fmt2.format(Math.max(0,tot-pu))}</b>${pn&&nn>pn?` (${nn-pn} noche${nn-pn>1?'s':''})`:''}${tot-pu<=0.009?' · <b>completo</b>':''}`:' · coloca el Monto total de la reserva arriba para ver lo que falta')}
+$('#aAdd').onclick=()=>{const d=aRow();const nn=parseFloat(F.eNoches.value),tot=parseFloat(F.eUsd.value),rest=nn-aRead().reduce((s,e)=>s+(e.noches||0),0);if(nn>0&&tot>0&&rest>0){d.querySelector('.an').value=1;d.querySelector('.an').dispatchEvent(new Event('input'))}aTot();d.querySelector('.au').focus()};
+['input','change'].forEach(ev=>{F.eUsd.addEventListener(ev,aTot);F.eNoches.addEventListener(ev,aTot)});
 $('#xAdd').onclick=()=>{xRow();xTot();const l=[...document.querySelectorAll('#xList .xc')].pop();l&&l.focus()};
 ['input','change'].forEach(ev=>{F.eUsd.addEventListener(ev,xTot);F.eBs.addEventListener(ev,xTot)});
 function collect(){
@@ -1028,6 +1058,9 @@ function collect(){
   for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
   for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
   const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null; r.mesfact=$('#eMesFact').value||null;
+  { const A=aRead(); r.abonos=A.length?A:null; const tot=parseFloat(F.eUsd.value), pu=A.reduce((s,e)=>s+(e.usd||0),0), su=(r.status||'').toUpperCase();
+    if(A.length&&tot>0&&(!su||su==='POR PAGAR'||su==='PAGO PARCIAL'||su==='PAGADO')) r.status=pu>=tot-0.009?'PAGADO':'PAGO PARCIAL';
+    else if(!A.length&&su==='PAGO PARCIAL') r.status='POR PAGAR'; }
   return r;
 }
 async function save(){
