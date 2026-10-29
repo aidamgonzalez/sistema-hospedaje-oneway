@@ -754,12 +754,13 @@ function rebuild(){
   const AHr=allHotels(); for(const r of out){
     const X=Array.isArray(r.facturas)?r.facturas:[], stU=(r.status||'').toUpperCase(), mp=stU.startsWith('POR PAGAR')||stU.startsWith('PAGO PARCIAL');
     const AB=Array.isArray(r.abonos)?r.abonos:[]; r.abU=AB.length?AB.reduce((a,e)=>a+(num(e.usd)||0),0):null; r.abN=AB.reduce((a,e)=>a+(num(e.noches)||0),0);
-    const mU=num(r.usd)!=null?Math.max(0,Math.round((r.usd-(r.abU||0))*100)/100):null, mB=num(r.bs)!=null?(r.abU&&num(r.bcv)&&mU!=null?Math.round(mU*r.bcv*100)/100:Math.max(0,r.bs-AB.reduce((a,e)=>a+(num(e.bs)||0),0))):null; r.remU=AB.length?mU:null;
-    const sU=X.reduce((a,e)=>a+(num(e.usd)||0),0), sB=X.reduce((a,e)=>a+(num(e.bs)||0),0);
-    r.tusd=num(r.usd)!=null||sU?(num(r.usd)||0)+sU:null; r.tbs=num(r.bs)!=null||sB?(num(r.bs)||0)+sB:null;
+    const r2=v=>Math.round(v*100)/100, tR=num(r.bcv)||(num(r.bs)!=null?(num(tasaFor(r.in||todayStr(),r.moneda==='EUR'?'EUR':'USD')?.v)||num(tasaFor(todayStr(),r.moneda==='EUR'?'EUR':'USD')?.v)):null), U=num(r.usd)!=null?r.usd:(num(r.bs)!=null&&tR?r2(r.bs/tR):null), eU=e=>num(e.usd)!=null?e.usd:(num(e.bs)!=null&&num(e.bcv)?r2(e.bs/e.bcv):null); r.uDer=num(r.usd)==null&&U!=null?U:null;
+    const mU=U!=null?Math.max(0,r2(U-(r.abU||0))):null, mB=num(r.bs)!=null?(r.abU&&num(r.bcv)&&mU!=null?Math.round(mU*r.bcv*100)/100:Math.max(0,r.bs-AB.reduce((a,e)=>a+(num(e.bs)||0),0))):null; r.remU=AB.length?mU:null;
+    const sU=X.reduce((a,e)=>a+(eU(e)||0),0), sB=X.reduce((a,e)=>a+(num(e.bs)||0),0);
+    r.tusd=U!=null||sU?(U||0)+sU:null; r.tbs=num(r.bs)!=null||sB?(num(r.bs)||0)+sB:null;
     const XP=X.filter(e=>(e.status||'POR PAGAR')==='POR PAGAR');
-    const pU=(mp?mU||0:0)+XP.reduce((a,e)=>a+(num(e.usd)||0),0), pB=(mp?mB||0:0)+XP.reduce((a,e)=>a+(num(e.bs)||0),0);
-    r.isPend=mp||XP.length>0; r.pusd=(mp&&num(r.usd)!=null)||XP.some(e=>num(e.usd)!=null)?pU:null; r.pbs=(mp&&num(r.bs)!=null)||XP.some(e=>num(e.bs)!=null)?pB:null;
+    const pU=(mp?mU||0:0)+XP.reduce((a,e)=>a+(eU(e)||0),0), pB=(mp?mB||0:0)+XP.reduce((a,e)=>a+(num(e.bs)||0),0);
+    r.isPend=mp||XP.length>0; r.pusd=(mp&&U!=null)||XP.some(e=>eU(e)!=null)?pU:null; r.pbs=(mp&&num(r.bs)!=null)||XP.some(e=>num(e.bs)!=null)?pB:null;
     const pc=AHr[upN(r.hotel)]?.retencion; r.ret=r.tbs!=null&&pc?retOf(r.tbs,pc):null; r.pret=r.pbs!=null&&pc?retOf(r.pbs,pc):0;
     const RP=[]; if(num(r.bs)) RP.push(!!r.ret_ok); X.forEach(e=>{if(num(e.bs)) RP.push(!!e.ret_ok)});
     r.retAplica=pc>0&&RP.length>0; r.retPend=r.retAplica&&RP.some(v=>!v); r.retDone=r.retAplica&&RP.every(v=>v);
@@ -811,8 +812,8 @@ function render(){
     const PL=list.filter(r=>r.isPend);
     const pu=PL.reduce((s,r)=>s+(r.moneda!=='EUR'?r.pusd||0:0),0), pe=PL.reduce((s,r)=>s+(r.moneda==='EUR'?r.pusd||0:0),0), pb=PL.reduce((s,r)=>s+(r.pbs||0),0), pr=PL.reduce((s,r)=>s+(r.pret||0),0);
     const sinM=PL.filter(r=>r.pusd==null&&r.pbs==null&&!r.grupo).length, nh=new Set(PL.map(r=>r.hotel)).size;
-    $('#summary').innerHTML=`<div class="pendtot"><div class="pt-h"><b>Total por pagar</b><span>${fmt0.format(PL.length)} reservas en ${nh} ${nh===1?'hotel':'hoteles'}${sinM?` · ${sinM} sin monto cargado`:''}</span></div>`+
-      [['$ '+fmt2.format(pu),'Pendiente en $'],...(pe?[['€ '+fmt2.format(pe),'Pendiente en €']]:[]),['Bs '+fmt2.format(pb),'Pendiente en Bs'],['Bs '+fmt2.format(pr),'Retenciones'],['Bs '+fmt2.format(pb-pr),'A pagar a hoteles']]
+    $('#summary').innerHTML=`<div class="pendtot"><div class="pt-h"><b>Total por pagar</b><span>${fmt0.format(PL.length)} reservas en ${nh} ${nh===1?'hotel':'hoteles'}${sinM?` · ${sinM} sin monto cargado`:''}${PL.some(r=>r.uDer!=null)?` · * ${PL.filter(r=>r.uDer!=null).length} con $ calculado (Bs ÷ tasa BCV)`:''}</span></div>`+
+      [['$ '+fmt2.format(pu),'Pendiente en $'+(PL.some(r=>r.uDer!=null)?' *':'')],...(pe?[['€ '+fmt2.format(pe),'Pendiente en €']]:[]),['Bs '+fmt2.format(pb),'Pendiente en Bs'],['Bs '+fmt2.format(pr),'Retenciones'],['Bs '+fmt2.format(pb-pr),'A pagar a hoteles']]
       .map(([v,l],i,a)=>`<div class="kpi${i===a.length-1?' big':''}"><b>${v}</b><span>${l}</span></div>`).join('')+'</div>';
   } else
   $('#summary').innerHTML=[[fmt0.format(list.length),'Reservas'],[fmt0.format(tN),'Noches'],['$ '+fmt2.format(tU),'Monto en $'],['Bs '+fmt2.format(tB),'Monto en Bs'],[fmt0.format(pend),'Por pagar'],[fmt0.format(list.filter(r=>r.retPend).length),'Retenciones pendientes'],[fmt0.format(cr),'Fechas cruzadas']]
@@ -836,7 +837,7 @@ function render(){
           const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span></td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(sb-gr)}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
         } else {
           const empty=num(x.usd)==null&&num(x.bs)==null&&x.grupo;
-          const XX=x.facturas||[]; money=`<td class="num">${num(x.usd)!=null?(x.moneda==='EUR'?'€ ':'')+fmt2.format(x.usd):(empty?'<span class="mut">pago compartido</span>':'')}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}${XX.length?`<span class="xsub">+${XX.length} fact. · total ${fmt2.format(x.tusd||0)}</span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs?`<span class="xsub">total ${fmt2.format(x.tbs)}</span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(x.tbs-rr)}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
+          const XX=x.facturas||[]; money=`<td class="num">${num(x.usd)!=null?(x.moneda==='EUR'?'€ ':'')+fmt2.format(x.usd):(x.uDer!=null?`<span class="mut" title="Calculado: Bs ÷ tasa">${(x.moneda==='EUR'?'€ ':'')+fmt2.format(x.uDer)}</span>`:(empty?'<span class="mut">pago compartido</span>':''))}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}${XX.length?`<span class="xsub">+${XX.length} fact. · total ${fmt2.format(x.tusd||0)}</span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs?`<span class="xsub">total ${fmt2.format(x.tbs)}</span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(x.tbs-rr)}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
         }
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
@@ -1891,7 +1892,7 @@ render(); renderTasaBox();
   try{ db=await claude.use('db') }catch(e){}
   if(!db){ setSync('err','Sin conexión'); loaded=true; $('#emptyTitle').textContent='No se pudo abrir la base de datos'; $('#emptyTxt').textContent='Abre esta página desde claude.ai con tu cuenta para ver y registrar reservas.'; render(); return }
   db.doc('config/general').onSnapshot(d=>{const a=(d.exists&&d.data().anios)||[2026];anios=[...new Set(a.map(Number))].sort((x,y)=>x-y);if(!anios.includes(year))openYear(anios[anios.length-1]);else fillYears()},()=>{});
-  db.doc('config/tasas').onSnapshot(d=>{tasasV=d.exists;tasas=(d.exists&&d.data().items)||{};renderTasaBox();if(!$('#sheet').hidden)bcvHint();if(view==='creditos')renderCred()},()=>{});
+  db.doc('config/tasas').onSnapshot(d=>{tasasV=d.exists;tasas=(d.exists&&d.data().items)||{};renderTasaBox();if(rows.length)rebuild();if(!$('#sheet').hidden)bcvHint();if(view==='creditos')renderCred()},()=>{});
   db.doc('creditos/deudas').onSnapshot(d=>{deuV=d.exists;deu=d.exists?d.data():{fecha_corte:null,tasa:null,items:{}};if(view==='creditos')renderCred()},()=>{});
   db.doc('creditos/pagos').onSnapshot(d=>{pagV=d.exists;pag=d.exists?d.data():{items:{}};if(view==='creditos')renderCred()},()=>{});
   db.doc('config/hoteles').onSnapshot(d=>{catalogExists=d.exists;catalog=(d.exists&&d.data().lista)||{};fillFilters();render()},()=>{});
