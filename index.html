@@ -763,6 +763,8 @@ function rebuild(){
     const XP=X.filter(e=>(e.status||'POR PAGAR')==='POR PAGAR');
     const pU=(mp?mU||0:0)+XP.reduce((a,e)=>a+(eU(e)||0),0), pB=(mp?mB||0:0)+XP.reduce((a,e)=>a+(num(e.bs)||0),0);
     r.isPend=mp||XP.length>0; r.pusd=(mp&&U!=null)||XP.some(e=>eU(e)!=null)?pU:null; r.pbs=(mp&&num(r.bs)!=null)||XP.some(e=>num(e.bs)!=null)?pB:null;
+    // Lo pendiente se paga a la tasa del día: Bs = $ × tasa BCV de hoy
+    const tH=num(tasaFor(todayStr(),r.moneda==='EUR'?'EUR':'USD')?.v); r.tHoy=null; if(r.isPend&&r.pusd!=null&&tH){ r.pbs=r2(r.pusd*tH); r.tHoy=tH }
     const pc=AHr[upN(r.hotel)]?.retencion; r.ret=r.tbs!=null&&pc?retOf(r.tbs,pc):null; r.pret=r.pbs!=null&&pc?retOf(r.pbs,pc):0; r.pislr=r.pbs!=null&&pc?islrOf(r.pbs,pc):0;
     const RP=[]; if(num(r.bs)) RP.push(!!r.ret_ok); X.forEach(e=>{if(num(e.bs)) RP.push(!!e.ret_ok)});
     r.retAplica=pc>0&&RP.length>0; r.retPend=r.retAplica&&RP.some(v=>!v); r.retDone=r.retAplica&&RP.every(v=>v);
@@ -815,7 +817,7 @@ function render(){
     const pu=PL.reduce((s,r)=>s+(r.moneda!=='EUR'?r.pusd||0:0),0), pe=PL.reduce((s,r)=>s+(r.moneda==='EUR'?r.pusd||0:0),0), pb=PL.reduce((s,r)=>s+(r.pbs||0),0), pr=PL.reduce((s,r)=>s+(r.pret||0),0), pi=PL.reduce((s,r)=>s+(r.pislr||0),0);
     const sinM=PL.filter(r=>r.pusd==null&&r.pbs==null&&!r.grupo).length, nh=new Set(PL.map(r=>r.hotel)).size;
     $('#summary').innerHTML=`<div class="pendtot"><div class="pt-h"><b>Total por pagar</b><span>${fmt0.format(PL.length)} reservas en ${nh} ${nh===1?'hotel':'hoteles'}${sinM?` · ${sinM} sin monto cargado`:''}${PL.some(r=>r.uDer!=null)?` · * ${PL.filter(r=>r.uDer!=null).length} con $ calculado (Bs ÷ tasa BCV)`:''}</span></div>`+
-      [['$ '+fmt2.format(pu),'Pendiente en $'+(PL.some(r=>r.uDer!=null)?' *':'')],...(pe?[['€ '+fmt2.format(pe),'Pendiente en €']]:[]),['Bs '+fmt2.format(pb),'Pendiente en Bs'],['Bs '+fmt2.format(pr),'Retención IVA'],...(pi?[['Bs '+fmt2.format(pi),'Retención ISLR 2%']]:[]),['Bs '+fmt2.format(pb-pr-pi),'A pagar a hoteles']]
+      [['$ '+fmt2.format(pu),'Pendiente en $'+(PL.some(r=>r.uDer!=null)?' *':'')],...(pe?[['€ '+fmt2.format(pe),'Pendiente en €']]:[]),['Bs '+fmt2.format(pb),'Pendiente en Bs'+(PL.some(r=>r.tHoy)?' (tasa de hoy)':'')],['Bs '+fmt2.format(pr),'Retención IVA'],...(pi?[['Bs '+fmt2.format(pi),'Retención ISLR 2%']]:[]),['Bs '+fmt2.format(pb-pr-pi),'A pagar a hoteles']]
       .map(([v,l],i,a)=>`<div class="kpi${i===a.length-1?' big':''}"><b>${v}</b><span>${l}</span></div>`).join('')+'</div>';
   } else
   $('#summary').innerHTML=[[fmt0.format(list.length),'Reservas'],[fmt0.format(tN),'Noches'],['$ '+fmt2.format(tU),'Monto en $'],['Bs '+fmt2.format(tB),'Monto en Bs'],[fmt0.format(pend),'Por pagar'],[fmt0.format(list.filter(r=>r.retPend).length),'Retenciones pendientes'],[fmt0.format(cr),'Fechas cruzadas']]
