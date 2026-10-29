@@ -251,6 +251,8 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .monsel{padding:4px 6px;border-radius:8px;font-size:12.5px}
 .selsum{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;font-variant-numeric:tabular-nums}.selsum b{font-weight:700}.selsum span{white-space:nowrap}
 .facsearch{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:12px}.facsearch .f{min-width:240px}#hFacTbl tbody tr{cursor:pointer}#hFacTbl mark{background:#f3dfb6;color:inherit;border-radius:3px;padding:0 2px}
+.mvhist{background:var(--info-bg);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5}.mvhist b{color:var(--info)}.mvhist div+div{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.mvchip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:#fdecd2;color:#8a5a14;white-space:nowrap}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -430,7 +432,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox" id="tblBox"><table id="tbl"><thead></thead><tbody></tbody></table></div>
     <div class="empty" id="empty" hidden><h2 id="emptyTitle">Cargando las reservas…</h2><p id="emptyTxt">En cuanto lleguen los datos aparecen aquí. Para registrar una, usa “+ Nueva reserva”.</p></div>
     <div class="pager" id="pager"></div>
-    <div class="selbar" id="selbar" hidden><b id="selN"></b><span id="selSum" class="selsum"></span><button id="imgBtn" type="button">🖼 Imagen para el hotel</button><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
+    <div class="selbar" id="selbar" hidden><b id="selN"></b><span id="selSum" class="selsum"></span><button id="imgBtn" type="button">🖼 Imagen para el hotel</button><button id="mvSelBtn" type="button">⇄ Cambiar de hotel</button><button class="primary" id="grpBtn" type="button">Unir en un solo pago</button><button id="ungrpBtn" type="button">Separar del pago</button><span class="spacer"></span><button class="ghost" id="selClear" type="button">Cancelar selección</button></div>
   </section>
   <section id="view-reportes" hidden>
     <div class="rbar">
@@ -536,6 +538,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f"><label for="eObs">Observación</label><input id="eObs" list="dlObs" placeholder="SIN COMIDAS, DESAYUNO…"></div>
     <div class="sec">Montos</div>
     <div class="gbox" id="gbox" hidden></div>
+    <div class="mvhist full" id="mvHist" hidden></div>
     <div class="f"><label for="eUsd" id="lblUsd">Monto $</label><input id="eUsd" type="number" step="0.01" min="0"></div>
     <div class="f"><label for="eBcv">Tasa BCV</label><input id="eBcv" type="number" step="0.01" min="0"></div>
     <div class="f"><label for="eBs">Monto Bs</label><input id="eBs" type="number" step="0.01" min="0"></div>
@@ -559,6 +562,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <footer>
     <button class="primary" id="saveBtn" type="button">Guardar</button>
     <button id="cancelBtn" type="button">Cancelar</button>
+    <button id="mvBtn" type="button" hidden>⇄ Cambiar de hotel</button>
     <span class="spacer"></span>
     <button class="danger" id="delBtn" type="button" hidden>Eliminar</button>
     <button class="danger" id="delConfirm" type="button" hidden>Sí, eliminar</button>
@@ -622,6 +626,18 @@ html,body{max-width:100%;overflow-x:hidden}
     <p class="hint full">Elige una fecha para cargar o corregir su tasa. Las reservas usan la tasa del día en que se registran; si un día no tiene tasa, se usa la del último día cargado.</p>
     <div class="full tablebox"><table id="tTbl"><thead><tr><th>Fecha</th><th class="num">Tasa $</th><th class="num">Tasa €</th></tr></thead><tbody></tbody></table></div>
   </form>
+</aside>
+<aside class="sheet" id="msheet" hidden aria-labelledby="mTitle">
+  <header><h2 id="mTitle">Cambiar de hotel</h2><button class="ghost" id="mClose" type="button" aria-label="Cerrar">✕</button></header>
+  <form id="mForm" onsubmit="return false">
+    <ul id="mList" class="gtlist full"></ul>
+    <div class="f full"><label for="mHotel">Hotel nuevo</label><input id="mHotel" list="dlHotelF" placeholder="Escribe el hotel" autocomplete="off"></div>
+    <div class="f"><label for="mFecha">Desde la noche del</label><input id="mFecha" type="date"><span class="hint" id="mFechaH">Si es el check-in, se cambia toda la estadía</span></div>
+    <div class="f"><label class="check" style="margin-top:22px"><input type="checkbox" id="mMontos"> Conservar montos y factura</label></div>
+    <div class="f full"><label for="mMotivo">Motivo del cambio</label><textarea id="mMotivo" rows="3" placeholder="Ej. Hotel sin disponibilidad, solicitud del cliente, overbooking…" style="width:100%;resize:vertical"></textarea></div>
+    <p class="hint full" id="mMsg"></p>
+  </form>
+  <footer><button class="primary" id="mSave" type="button">Cambiar de hotel</button><button id="mCancel" type="button">Cancelar</button></footer>
 </aside>
 <aside class="sheet" id="isheet" hidden aria-labelledby="iTitle">
   <header><h2 id="iTitle">Imagen para el hotel</h2><button class="ghost" id="iClose" type="button" aria-label="Cerrar">✕</button></header>
@@ -825,7 +841,7 @@ function render(){
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
     <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
-    <td class="pax">${esc(x.pasajero)}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
+    <td class="pax">${esc(x.pasajero)}${Array.isArray(x.cambios)&&x.cambios.length?`<span class="mvchip" title="${esc(x.cambios.map(c=>'De '+c.de+' → '+c.a+' ('+fd(c.fecha)+'): '+c.motivo).join(' | '))}">⇄ VIENE DE ${esc(x.cambios[x.cambios.length-1].de)}</span>`:''}${x.cambio_a?`<span class="mvchip" title="${esc(x.cambio_a.motivo)}">⇄ PASA A ${esc(x.cambio_a.a)} EL ${fd(x.cambio_a.fecha).slice(0,5)}</span>`:''}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
     <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
     <td>${stLimpio(x.status)?`<span class="chip ${chipClass(x.status)}">${esc(stLimpio(x.status))}</span>`:''}${isNoShow(x)?' <span class="chip bad">NO SHOW</span>':''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
     }
@@ -989,6 +1005,48 @@ $('#imgBtn').onclick=openImg; $('#iClose').onclick=closeImg; $('#iBs').addEventL
 $('#iDown').onclick=async()=>{ if(!imgBlob)return; await saveFile(imgName,new Uint8Array(await imgBlob.arrayBuffer())) };
 $('#iShare').onclick=async()=>{ try{ await navigator.share({files:[new File([imgBlob],imgName,{type:'image/jpeg'})],title:imgName}) }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo compartir; usa Descargar.') } };
 $('#iCopy').onclick=async()=>{ try{ const bm=await createImageBitmap(imgBlob), c2=document.createElement('canvas'); c2.width=bm.width; c2.height=bm.height; c2.getContext('2d').drawImage(bm,0,0); const png=await new Promise(res=>c2.toBlob(res,'image/png')); await navigator.clipboard.write([new ClipboardItem({'image/png':png})]); toast('Imagen copiada: pégala en WhatsApp o en el correo') }catch(e){ toast('No se pudo copiar; usa Descargar.') } };
+/* ---------- cambio de hotel ---------- */
+let mvRows=[];
+function renderMvHist(r){ const el=$('#mvHist'); const L=[...(r&&Array.isArray(r.cambios)?r.cambios:[])]; if(r&&r.cambio_a) L.push({...r.cambio_a,de:r.hotel,_sale:true});
+  el.hidden=!L.length; el.innerHTML=L.map(c=>`<div><b>⇄ ${c._sale?'Pasa a':'Cambio de hotel'}:</b> ${esc(c.de)} → <b>${esc(c.a)}</b> desde el ${fd(c.fecha)}${c.por?` · ${esc(c.por)}`:''}${c.el?` · ${fd(c.el.slice(0,10))}`:''}<br><span>Motivo: ${esc(c.motivo||'')}</span></div>`).join('') }
+function openMv(list){ mvRows=list.filter(Boolean); if(!mvRows.length){toast('Selecciona las reservas primero.');return}
+  $('#mList').innerHTML=mvRows.map(r=>`<li><b>${esc(r.pasajero||'')}</b> · ${esc(r.hotel)} · ${fd(r.in)}–${fd(r.out)}</li>`).join('');
+  $('#mHotel').value=''; $('#mMotivo').value=''; $('#mMontos').checked=false; $('#mMsg').textContent='';
+  const ins=[...new Set(mvRows.map(r=>r.in))]; $('#mFecha').value=ins.length===1?ins[0]:''; $('#mFecha').disabled=ins.length!==1;
+  $('#mFechaH').textContent=ins.length===1?'Si es el check-in, se cambia toda la estadía':'Con varias reservas se cambia la estadía completa de cada una';
+  $('#scrim').hidden=false; $('#msheet').hidden=false; setTimeout(()=>$('#mHotel').focus(),50) }
+function closeMv(){ $('#msheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true }
+$('#mvBtn').onclick=()=>{ if(editing) openMv([rows.find(x=>x.slug===editing.slug&&x.id===editing.id)||editing]) };
+$('#mvSelBtn').onclick=()=>openMv(selRows());
+$('#mClose').onclick=closeMv; $('#mCancel').onclick=closeMv;
+$('#mSave').onclick=async()=>{
+  const hn=upN($('#mHotel').value), motivo=$('#mMotivo').value.trim(), keep=$('#mMontos').checked, fch=$('#mFecha').disabled?null:$('#mFecha').value;
+  if(!hn){toast('Escribe el hotel nuevo.');$('#mHotel').focus();return}
+  if(!motivo){toast('Escribe el motivo del cambio.');$('#mMotivo').focus();return}
+  if(mvRows.some(r=>upN(r.hotel)===hn)){toast('Una de las reservas ya está en ese hotel.');return}
+  if(fch&&(fch<mvRows[0].in||fch>=mvRows[0].out)){toast('La fecha debe estar entre el check-in y la noche antes del check-out.');return}
+  const cm=allHotels()[hn]; let sid=Object.keys(hotels).find(k=>upN(hotels[k].nombre)===hn);
+  const por=(document.getElementById('uName')?.textContent||'').split(' · ')[0]||null, el=new Date().toISOString();
+  const btn=$('#mSave'); btn.disabled=true;
+  try{
+    if(!sid){ sid=cm?cm.slug:slug(hn); while(hotels[sid]) sid+='-2'; const meta={nombre:cm?cm.nombre:hn,estado:cm?.estado||null,categoria:cm?.categoria||null,moneda:cm?.moneda||'USD'}; await col().doc(sid).set({...meta,orden:Object.keys(hotels).length,rows:{}}); if(!cm){try{await writeCatalog(sid,meta)}catch(e){}} }
+    const nombreN=cm?cm.nombre:hn, add={}, upd={};
+    for(const r of mvRows){
+      const base={}; for(const [k,v] of Object.entries(r)) if(!['id','slug','hotel','moneda','ord','tusd','tbs','pusd','pbs','isPend','ret','pret','retAplica','retPend','retDone','cruce','cruces','ext','_names','abU','abN','remU','rusd','rbs','nota','pct','rret','rnet'].includes(k)) base[k]=v;
+      const split=fch&&fch>r.in;
+      const ch={de:r.hotel,a:nombreN,fecha:split?fch:r.in,motivo,por,el,desde:r.slug+'|'+r.id};
+      const nr={...base,grupo:null,editado:el,cambios:[...(Array.isArray(r.cambios)?r.cambios:[]),ch]}; delete nr.cambio_a;
+      if(split){ nr.in=fch; nr.noches=Math.round((new Date(r.out)-new Date(fch))/864e5) }
+      if(split||!keep){ Object.assign(nr,{usd:null,bs:null,bcv:null,tarifa:null,factura:null,facturas:null,abonos:null,presupuesto:null,ret_ok:false,ret_comp:null,status:'POR PAGAR'}) }
+      const nid='n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      add[nid]=nr;
+      (upd[r.slug]=upd[r.slug]||{})[r.id]=split?{out:fch,noches:Math.round((new Date(fch)-new Date(r.in))/864e5),cambio_a:{a:nombreN,fecha:fch,motivo,por,el},editado:el}:{_borrado:true,cambio_a:{a:nombreN,fecha:r.in,motivo,por,el}};
+    }
+    await col().doc(sid).update({rows:add});
+    for(const [sl,rs] of Object.entries(upd)) await col().doc(sl).update({rows:rs});
+    toast(`${mvRows.length===1?'Reserva cambiada':mvRows.length+' reservas cambiadas'} a ${nombreN}`); sel.clear(); closeMv(); if(!$('#sheet').hidden) closeSheet();
+  }catch(e){ toast('No se pudo cambiar de hotel. Inténtalo de nuevo.') } finally{ btn.disabled=false }
+};
 async function ungroupSelected(){
   const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(r=>r&&r.grupo);
   try{ await setGroup(rs,null); sel.clear(); toast('Reservas separadas del pago compartido.') }catch(e){ toast('No se pudo separar. Inténtalo de nuevo.') }
@@ -1045,7 +1103,7 @@ function openSheet(r,pre){
   if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
   F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||'';
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
-  $('#delBtn').hidden=!r; $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  $('#delBtn').hidden=!r; $('#mvBtn').hidden=!r||!canWrite; renderMvHist(r); $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot(); $('#aList').innerHTML=''; (r?.abonos||[]).forEach(e=>aRow(e)); aTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
@@ -1245,7 +1303,7 @@ $('#newBtn').onclick=()=>openSheet(null);
 $('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();render()};
 $('#newHotelBtn').onclick=()=>openHotel(null);
 $('#hClose').onclick=closeHotel; $('#hCancel').onclick=closeHotel; $('#hSave').onclick=saveHotel; $('#hform').addEventListener('submit',e=>{e.preventDefault();saveHotel()});
-$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT();closeK();closeGT();closeImg()};
+$('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT();closeK();closeGT();closeImg();closeMv()};
 $('#saveBtn').onclick=save; $('#form').addEventListener('submit',e=>{e.preventDefault();save()});
 $('#delBtn').onclick=()=>{$('#delBtn').hidden=true;$('#delConfirm').hidden=false}; $('#delConfirm').onclick=del;
 $('#exportBtn').onclick=exportXlsx;
