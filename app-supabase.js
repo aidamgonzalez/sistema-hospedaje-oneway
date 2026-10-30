@@ -19,13 +19,20 @@
   const loadedCols = new Set();
   const colOf = p => p.replace(/\/[^/]+$/, '');
   const idOf = p => p.split('/').pop();
-  const snapDoc = p => ({ id: idOf(p), exists: cache.has(p), data: () => cache.has(p) ? JSON.parse(JSON.stringify(cache.get(p))) : undefined, metadata: { fromCache: false, hasPendingWrites: false } });
+  const jsC = new Map(), cloneC = new Map();   // JSON y copia por documento (se rehacen solo cuando el documento cambia)
+  const jsOf = p => { if (!jsC.has(p)) jsC.set(p, JSON.stringify(cache.get(p))); return jsC.get(p); };
+  const cloneOf = p => { if (!cloneC.has(p)) cloneC.set(p, JSON.parse(jsOf(p))); return cloneC.get(p); };
+  const snapDoc = p => ({ id: idOf(p), exists: cache.has(p), data: () => cache.has(p) ? cloneOf(p) : undefined, metadata: { fromCache: false, hasPendingWrites: false } });
   const snapCol = c => { const docs = [...cache.keys()].filter(p => colOf(p) === c).sort().map(snapDoc); return { docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false, hasPendingWrites: false } }; };
   function emit(p) {
     (docL.get(p) || []).forEach(f => { try { f(snapDoc(p)) } catch (e) { console.error(e) } });
     const c = colOf(p); (colL.get(c) || []).forEach(f => { try { f(snapCol(c)) } catch (e) { console.error(e) } });
   }
-  function put(p, data) { if (data == null) cache.delete(p); else cache.set(p, data); emit(p); }
+  function put(p, data) {
+    if (data == null) { if (!cache.has(p)) return; cache.delete(p); jsC.delete(p); cloneC.delete(p); emit(p); return; }
+    const js = JSON.stringify(data); if (cache.has(p) && jsOf(p) === js) return;   // mismo contenido (eco del tiempo real): no recalcular
+    cache.set(p, data); jsC.set(p, js); cloneC.delete(p); emit(p);
+  }
   let channel = null;
   function startRealtime() {
     if (channel) return;
@@ -46,7 +53,7 @@
       delete: async () => { await q(sb.from('docs').delete().eq('path', path)); put(path, null); },
       onSnapshot: (next, err) => {
         if (!docL.has(path)) docL.set(path, new Set()); docL.get(path).add(next); startRealtime();
-        sb.from('docs').select('path,data').eq('path', path).then(({ data, error }) => { if (error) { err && err(mapErr(error)); return; } if (data[0]) cache.set(path, data[0].data); else cache.delete(path); next(snapDoc(path)); });
+        sb.from('docs').select('path,data').eq('path', path).then(({ data, error }) => { if (error) { err && err(mapErr(error)); return; } if (data[0]) cache.set(path, data[0].data); else cache.delete(path); jsC.delete(path); cloneC.delete(path); next(snapDoc(path)); });
         return () => docL.get(path) && docL.get(path).delete(next);
       },
       collection: c => colRef(path + '/' + c)
@@ -73,8 +80,8 @@
       const part = await q(sb.from('docs').select('path,data').eq('coleccion', c).range(from, from + 499));
       rows.push(...part); if (part.length < 500) break;
     }
-    [...cache.keys()].filter(p => colOf(p) === c).forEach(p => cache.delete(p));
-    rows.forEach(r => cache.set(r.path, r.data)); loadedCols.add(c);
+    [...cache.keys()].filter(p => colOf(p) === c).forEach(p => { cache.delete(p); jsC.delete(p); cloneC.delete(p); });
+    rows.forEach(r => { cache.set(r.path, r.data); jsC.delete(r.path); cloneC.delete(r.path); }); loadedCols.add(c);
   }
 
   const dbApi = configured ? { doc: docRef, collection: colRef } : null;
@@ -153,7 +160,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const bar = document.querySelector('header.top .bar');
     const box = document.createElement('div'); box.className = 'ubox';
-    box.innerHTML = '<span class="uname" title="Versión del sistema">v 30/10 facturas por separado</span><span id="uName" class="uname"></span><button type="button" id="uBtn" hidden>Usuarios</button><button type="button" id="uOut" class="ghost">Salir</button>';
+    box.innerHTML = '<span class="uname" title="Versión del sistema">v 30/10 velocidad</span><span id="uName" class="uname"></span><button type="button" id="uBtn" hidden>Usuarios</button><button type="button" id="uOut" class="ghost">Salir</button>';
     bar.appendChild(box);
     $('#uOut').onclick = () => sb && sb.auth.signOut();
     $('#uBtn').onclick = openUsers;

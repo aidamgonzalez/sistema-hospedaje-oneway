@@ -718,8 +718,10 @@ function pctSel(attr,p,warn){if(!canWrite)return pctChip(p);const v=p==null?'':S
 function pctChip(p){return p==null?'<span class="chip warn">Ret. sin definir</span>':(+p===0?'<span class="chip">Sin retención</span>':`<span class="chip info">Ret. ${p}%</span>`)}
 
 /* ---------- hotels catalog ---------- */
-const upN=v=>String(v||'').trim().toUpperCase().replace(/\s+/g,' ');
-function allHotels(){ // merged by name: catalog + this year's docs
+const _upC=new Map(); const upN=v=>{const k=String(v||'');let r=_upC.get(k);if(r===undefined){r=k.trim().toUpperCase().replace(/\s+/g,' ');if(_upC.size>20000)_upC.clear();_upC.set(k,r)}return r};
+let _ahC=null,_ahH=null,_ahV=null;
+function allHotels(){ if(_ahC===catalog&&_ahH===hotels&&_ahV) return _ahV; _ahC=catalog; _ahH=hotels; return (_ahV=allHotels0()) }
+function allHotels0(){ // merged by name: catalog + this year's docs
   const m={};
   for(const [sid,h] of Object.entries(catalog)) if(h&&h.nombre&&!h._borrado) m[upN(h.nombre)]={slug:sid,nombre:h.nombre,estado:h.estado||null,categoria:h.categoria||null,moneda:h.moneda||'USD',retencion:h.retencion??null};
   for(const [sid,h] of Object.entries(hotels)){const k=upN(h.nombre);m[k]={...(m[k]||{}),slug:sid,nombre:h.nombre,estado:h.estado||m[k]?.estado||null,categoria:h.categoria||m[k]?.categoria||null,moneda:h.moneda||m[k]?.moneda||'USD'}}
@@ -739,7 +741,8 @@ const _eo=(i,o)=>o>i?o:i+'z';
 const overl=(a1,b1,a2,b2)=>!!(a1&&b1&&a2&&b2)&&a1<_eo(a2,b2)&&a2<_eo(a1,b1);
 
 /* ---------- data ---------- */
-function rebuild(){
+let _rbT=null; function rebuildSoon(){ clearTimeout(_rbT); _rbT=setTimeout(rebuild,40) }
+function rebuild(){ clearTimeout(_rbT);
   const out=[];
   for(const [sid,h] of Object.entries(hotels)){
     const rs=h.rows||{};
@@ -1348,8 +1351,8 @@ function openYear(y){
   hotels={}; rows=[]; loaded=false; page=0; fillFilters(); render();
   if(!db) return;
   const sub=()=>{unsub=col().limit(1000).onSnapshot(snap=>{
-    const h={}; snap.docs.forEach(d=>{if(d.exists)h[d.id]=d.data()}); hotels=h; loaded=true;
-    setSync(snap.metadata.fromCache?'':'on',snap.metadata.hasPendingWrites?'Guardando…':'Sincronizado'); rebuild();
+    const h={}; snap.docs.forEach(d=>{if(d.exists)h[d.id]=d.data()}); hotels=h; _ahV=null; loaded=true;
+    setSync(snap.metadata.fromCache?'':'on',snap.metadata.hasPendingWrites?'Guardando…':'Sincronizado'); rebuildSoon();
   },err=>{ setSync('err','Desconectado'); if(err&&err.code==='unavailable') setTimeout(sub,3000) })};
   sub();
 }
@@ -1478,10 +1481,13 @@ $('#rPdf').onclick=reportPdf; $('#rXls').onclick=reportXlsx;
 /* ---------- tasas BCV ---------- */
 let tasas={}, tasasV=false;
 const fmt4=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:4});
+let _tfT=null,_tfK={};
 function tasaFor(date,mon){
   const k=mon==='EUR'?'eur':'usd', d=date||todayStr();
-  const ks=Object.keys(tasas).filter(x=>x<=d&&num(tasas[x]?.[k])!=null).sort();
-  const f=ks[ks.length-1]; return f?{v:tasas[f][k],fecha:f}:null;
+  if(_tfT!==tasas){_tfT=tasas;_tfK={}}
+  const ks=_tfK[k]||(_tfK[k]=Object.keys(tasas).filter(x=>num(tasas[x]?.[k])!=null).sort());
+  let lo=0,hi=ks.length-1,f=null; while(lo<=hi){const m=(lo+hi)>>1; if(ks[m]<=d){f=ks[m];lo=m+1}else hi=m-1}
+  return f?{v:tasas[f][k],fecha:f}:null;
 }
 function renderTasaBox(){
   const t=todayStr(), r=tasas[t]||{};
@@ -1918,10 +1924,10 @@ render(); renderTasaBox();
   try{ db=await claude.use('db') }catch(e){}
   if(!db){ setSync('err','Sin conexión'); loaded=true; $('#emptyTitle').textContent='No se pudo abrir la base de datos'; $('#emptyTxt').textContent='Abre esta página desde claude.ai con tu cuenta para ver y registrar reservas.'; render(); return }
   db.doc('config/general').onSnapshot(d=>{const a=(d.exists&&d.data().anios)||[2026];anios=[...new Set(a.map(Number))].sort((x,y)=>x-y);if(!anios.includes(year))openYear(anios[anios.length-1]);else fillYears()},()=>{});
-  db.doc('config/tasas').onSnapshot(d=>{tasasV=d.exists;tasas=(d.exists&&d.data().items)||{};renderTasaBox();if(rows.length)rebuild();if(!$('#sheet').hidden)bcvHint();if(view==='creditos')renderCred()},()=>{});
+  db.doc('config/tasas').onSnapshot(d=>{tasasV=d.exists;tasas=(d.exists&&d.data().items)||{};_tfT=null;renderTasaBox();if(rows.length)rebuildSoon();if(!$('#sheet').hidden)bcvHint();if(view==='creditos')renderCred()},()=>{});
   db.doc('creditos/deudas').onSnapshot(d=>{deuV=d.exists;deu=d.exists?d.data():{fecha_corte:null,tasa:null,items:{}};if(view==='creditos')renderCred()},()=>{});
   db.doc('creditos/pagos').onSnapshot(d=>{pagV=d.exists;pag=d.exists?d.data():{items:{}};if(view==='creditos')renderCred()},()=>{});
-  db.doc('config/hoteles').onSnapshot(d=>{catalogExists=d.exists;catalog=(d.exists&&d.data().lista)||{};fillFilters();render()},()=>{});
+  db.doc('config/hoteles').onSnapshot(d=>{catalogExists=d.exists;catalog=(d.exists&&d.data().lista)||{};_ahV=null;fillFilters();render()},()=>{});
   openYear(year);
 })();
 })();
