@@ -563,6 +563,8 @@ html,body{max-width:100%;overflow-x:hidden}
   <footer>
     <button class="primary" id="saveBtn" type="button">Guardar</button>
     <button id="cancelBtn" type="button">Cancelar</button>
+    <button id="dupBtn" type="button" hidden title="Crear otra reserva igual: mismo hotel, fechas y datos">⧉ Duplicar</button>
+    <button id="saveDupBtn" type="button" hidden title="Guarda esta y abre otra igual para cambiar el nombre o las fechas">Guardar y otra igual</button>
     <button id="mvBtn" type="button" hidden>⇄ Cambiar de hotel</button>
     <span class="spacer"></span>
     <button class="danger" id="delBtn" type="button" hidden>Eliminar</button>
@@ -1048,6 +1050,9 @@ function openMv(list){ mvRows=list.filter(Boolean); if(!mvRows.length){toast('Se
   $('#mFechaH').textContent=ins.length===1?'Si es el check-in, se cambia toda la estadía':'Con varias reservas se cambia la estadía completa de cada una';
   $('#scrim').hidden=false; $('#msheet').hidden=false; setTimeout(()=>$('#mHotel').focus(),50) }
 function closeMv(){ $('#msheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true }
+$('#dupBtn').onclick=()=>{ const d=dupData(); pendingGroup=null; closeSheet(); openSheet(null,d); toast('Copia lista: cambia el nombre o las fechas y guarda') };
+$('#saveDupBtn').onclick=()=>{ _dupNext=dupData(); save() };
+setTimeout(()=>{ [F.eIn,F.eOut].forEach(el=>el.addEventListener('change',()=>setTimeout(dupRecalc,0))); ['input','change'].forEach(ev=>[F.ePax,F.eIn,F.eOut,F.eUsd,F.eBs].forEach(el=>el.addEventListener(ev,()=>{ if(_dupNext) _dupNext=dupData() }))) },0);
 $('#mvBtn').onclick=()=>{ if(editing) openMv([rows.find(x=>x.slug===editing.slug&&x.id===editing.id)||editing]) };
 $('#mvSelBtn').onclick=()=>openMv(selRows());
 $('#mClose').onclick=closeMv; $('#mCancel').onclick=closeMv;
@@ -1134,16 +1139,17 @@ function openSheet(r,pre){
   F.eHotel.value=r?r.hotel:(allHotels()[upN($('#fHotel').value)]?.nombre||''); F.eContrato.value=r?.contrato||$('#fContrato').value||''; F.eStatus.value=r?(r.status||''):'POR PAGAR';
   F.ePax.value=r?.pasajero||''; F.eIn.value=r?.in||''; F.eOut.value=r?.out||''; F.eNoches.value=r?.noches??'';
   if(pre){F.eHotel.value=pre.hotel||'';F.eContrato.value=pre.contrato||'';F.eStatus.value=pre.status||'';F.eIn.value=pre.in||'';F.eOut.value=pre.out||'';F.eNoches.value=pre.noches??''}
-  F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??''; F.eTarifa.value=r?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||'';
+  F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??pre?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??pre?.bs??''; F.eTarifa.value=r?.tarifa??pre?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||pre?.mesfact||'';
+  dupUnit=null; if(pre&&pre.dup){ const nn=num(pre.noches); dupUnit=nn?{u:pre.tarifa??(pre.usd!=null?pre.usd/nn:null),b:pre.bs!=null&&pre.usd==null?pre.bs/nn:null}:null; $('#sheetTitle').textContent='Nueva reserva (copia)'; if(pre.pasajero) F.ePax.value=pre.pasajero }
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
-  $('#delBtn').hidden=!r; $('#mvBtn').hidden=!r||!canWrite; renderMvHist(r); $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  $('#delBtn').hidden=!r; $('#mvBtn').hidden=!r||!canWrite; $('#dupBtn').hidden=!r||!canWrite; $('#saveDupBtn').hidden=!!r||!canWrite||!!pendingGroup; renderMvHist(r); $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot(); $('#aList').innerHTML=''; (r?.abonos||[]).forEach(e=>aRow(e)); aTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
   $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
   $('#scrim').hidden=false; $('#sheet').hidden=false; setTimeout(()=>(r||pre?F.ePax:F.eHotel).focus(),50);
 }
-function closeSheet(){ $('#scrim').hidden=true; $('#sheet').hidden=true; editing=null; pendingGroup=null; cruceOk=false; cruceSig=''; $('#saveBtn').textContent='Guardar' }
+function closeSheet(){ _dupNext=null; $('#scrim').hidden=true; $('#sheet').hidden=true; editing=null; pendingGroup=null; cruceOk=false; cruceSig=''; $('#saveBtn').textContent='Guardar' }
 function syncQuick(){const v=F.eStatus.value.trim().toUpperCase();document.querySelectorAll('#quickStatus .chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.s===v)))}
 $('#quickStatus').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;F.eStatus.value=b.dataset.s;syncQuick()});
 F.eStatus.addEventListener('input',syncQuick);
@@ -1252,7 +1258,12 @@ function collect(){
     else if(!A.length&&su==='PAGO PARCIAL') r.status='POR PAGAR'; }
   return r;
 }
+let _dupNext=null, dupUnit=null;
+function dupRecalc(){ if(!dupUnit) return; const nn=parseFloat(F.eNoches.value); if(!(nn>0)) return; if(dupUnit.u!=null){ F.eUsd.value=(dupUnit.u*nn).toFixed(2); moneyBase='usd'; calcBs() } else if(dupUnit.b!=null){ F.eBs.value=(dupUnit.b*nn).toFixed(2); moneyBase='bs'; usdDesdeBs() } }
+function dupData(fromForm){ const v=x=>x.value.trim(), n=x=>{const f=parseFloat(x.value);return isFinite(f)?f:null};
+  return {dup:true,hotel:v(F.eHotel),contrato:v(F.eContrato),status:'POR PAGAR',in:F.eIn.value,out:F.eOut.value,noches:n(F.eNoches),obs:v(F.eObs),bcv:n(F.eBcv),tarifa:n(F.eTarifa),usd:n(F.eUsd),bs:n(F.eBs),mesfact:$('#eMesFact').value||null} }
 async function save(){
+  const dn=_dupNext;
   if(!db){toast('Sin conexión con la base de datos: no se pudo guardar.');return}
   const hn=F.eHotel.value.trim().toUpperCase().replace(/\s+/g,' ');
   if(!hn){F.eHotel.focus();toast('Indica el hotel.');return}
@@ -1273,7 +1284,7 @@ async function save(){
     } else { await col().doc(sid).update({rows:{[id]:rec}}) }
     if(editing&&editing.slug!==sid){ await col().doc(editing.slug).update({rows:{[editing.id]:{_borrado:true}}}) }
     if(pg&&!pg.anchor.grupo){ try{ await setGroup([pg.anchor],pg.gid) }catch(e){} }
-    toast(pg?'Reserva añadida al pago compartido':(editing?'Reserva actualizada':'Reserva guardada')); closeSheet();
+    toast(pg?'Reserva añadida al pago compartido':(editing?'Reserva actualizada':'Reserva guardada')+(dn?' · ahora cambia el nombre o las fechas de la copia':'')); closeSheet(); if(dn) openSheet(null,dn);
   }catch(e){ toast(e&&e.code==='quota_exceeded'?'La base de datos está llena; exporta y archiva registros antiguos.':(e&&e.code==='invalid_argument'?'No tienes permiso para guardar cambios aquí.':'No se pudo guardar. Inténtalo de nuevo.')) }
   finally{ btn.disabled=!canWrite }
 }
