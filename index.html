@@ -253,6 +253,7 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .facsearch{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:12px}.facsearch .f{min-width:240px}#hFacTbl tbody tr{cursor:pointer}#hFacTbl mark{background:#f3dfb6;color:inherit;border-radius:3px;padding:0 2px}
 .mvhist{background:var(--info-bg);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5}.mvhist b{color:var(--info)}.mvhist div+div{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
 .mvchip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:#fdecd2;color:#8a5a14;white-space:nowrap}
+tr.xrowsub td{background:var(--surface-2);padding-top:4px;padding-bottom:4px;border-top:0}tr.xrowsub .xline{font-size:12.5px;color:var(--ink-2,#3b4b5c)}tr.xrowsub .chip{font-size:10px;padding:1px 6px}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -693,7 +694,7 @@ let rows=[];        // flattened {id, slug, hotel, ...}
 let year=2026, anios=[2026], unsub=null;
 try{const y=parseInt(localStorage.getItem('hosp-year'));if(y)year=y}catch(e){}
 let sel=new Set(), gsize={}, pendingGroup=null;
-let curList=[], rowByKey=new Map(), grpMap=new Map(); const grpOf=g=>grpMap.get(g)||[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
+let selX=new Set(); let curList=[], rowByKey=new Map(), grpMap=new Map(); const grpOf=g=>grpMap.get(g)||[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
 const fmt2=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt0=new Intl.NumberFormat('es-VE');
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -764,13 +765,15 @@ function rebuild(){
     const pU=(mp?mU||0:0)+XP.reduce((a,e)=>a+(eU(e)||0),0), pB=(mp?mB||0:0)+XP.reduce((a,e)=>a+(num(e.bs)||0),0);
     r.isPend=mp||XP.length>0; r.pusd=(mp&&U!=null)||XP.some(e=>eU(e)!=null)?pU:null; r.pbs=(mp&&num(r.bs)!=null)||XP.some(e=>num(e.bs)!=null)?pB:null;
     // Lo pendiente se paga a la tasa del día: Bs = $ × tasa BCV de hoy
-    const tH=num(tasaFor(todayStr(),r.moneda==='EUR'?'EUR':'USD')?.v); r.tHoy=null; if(r.isPend&&r.pusd!=null&&tH){ r.pbs=r2(r.pusd*tH); r.tHoy=tH }
+    const tH=num(tasaFor(todayStr(),r.moneda==='EUR'?'EUR':'USD')?.v); r.tH=tH||null; r.hU=U; r.hB=num(r.bs); r.hPend=mp; r.hPU=mp?mU:null;
+    r.xs=X.map(e=>({u:eU(e),b:num(e.bs),pend:(e.status||'POR PAGAR')==='POR PAGAR',n:e.numero?String(e.numero):'',c:e.concepto||''})); r.tHoy=null; if(r.isPend&&r.pusd!=null&&tH){ r.pbs=r2(r.pusd*tH); r.tHoy=tH }
     const pc=AHr[upN(r.hotel)]?.retencion; r.ret=r.tbs!=null&&pc?retOf(r.tbs,pc):null; r.pret=r.pbs!=null&&pc?retOf(r.pbs,pc):0; r.pislr=r.pbs!=null&&pc?islrOf(r.pbs,pc):0;
     const RP=[]; if(num(r.bs)) RP.push(!!r.ret_ok); X.forEach(e=>{if(num(e.bs)) RP.push(!!e.ret_ok)});
     r.retAplica=pc>0&&RP.length>0; r.retPend=r.retAplica&&RP.some(v=>!v); r.retDone=r.retAplica&&RP.every(v=>v);
   }
   rows=out; rowByKey=new Map(); grpMap=new Map(); for(const r of out){ rowByKey.set(r.slug+'|'+r.id,r); if(r.grupo){ if(!grpMap.has(r.grupo)) grpMap.set(r.grupo,[]); grpMap.get(r.grupo).push(r) } }
-  for(const k of [...sel]) if(!rowByKey.has(k)) sel.delete(k); fillFilters(); render();
+  for(const k of [...sel]) if(!rowByKey.has(k)) sel.delete(k);
+  for(const k of [...selX]){ const i=k.lastIndexOf('|'), r=rowByKey.get(k.slice(0,i)); if(!r||!(r.xs||[])[+k.slice(i+1)]) selX.delete(k) } fillFilters(); render();
 }
 function uniq(f){const c={};for(const r of rows){const v=r[f];if(v)c[v]=(c[v]||0)+1}return Object.keys(c).sort((a,b)=>c[b]-c[a])}
 function fillSelect(id,vals,labeler){const el=$(id),cur=el.value;el.innerHTML='<option value="">Todos</option>'+vals.map(v=>`<option value="${esc(v)}">${esc(labeler?labeler(v):v)}</option>`).join('');if(vals.includes(cur))el.value=cur}
@@ -842,7 +845,7 @@ function render(){
           const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span></td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(netOf(sb,hotelPct(x.hotel)))}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
         } else {
           const empty=num(x.usd)==null&&num(x.bs)==null&&x.grupo;
-          const XX=x.facturas||[], cu=x.moneda==='EUR'?'€ ':'', uM=num(x.usd)!=null?x.usd:x.uDer, uX=x.tusd!=null&&uM!=null?Math.round((x.tusd-uM)*100)/100:x.tusd; money=`<td class="num">${XX.length&&x.tusd!=null?`<b>${cu+fmt2.format(x.tusd)}</b><span class="xsub">Hab. ${uM!=null?fmt2.format(uM):'—'} + ${XX.length} fact. adic.</span>`:(num(x.usd)!=null?cu+fmt2.format(x.usd):(x.uDer!=null?`<span class="mut" title="Calculado: Bs ÷ tasa">${cu+fmt2.format(x.uDer)}</span>`:(empty?'<span class="mut">pago compartido</span>':'')))}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${XX.length&&x.tbs!=null?`<b>${fmt2.format(x.tbs)}</b><span class="xsub">Hab. ${num(x.bs)!=null?fmt2.format(x.bs):'—'} + adic.</span>`:(num(x.bs)!=null?fmt2.format(x.bs):'')}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(netOf(x.tbs,hotelPct(x.hotel)))}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
+          const XX=x.facturas||[], cu=x.moneda==='EUR'?'€ ':'', uM=num(x.usd)!=null?x.usd:x.uDer, uX=x.tusd!=null&&uM!=null?Math.round((x.tusd-uM)*100)/100:x.tusd; money=`<td class="num">${(num(x.usd)!=null?cu+fmt2.format(x.usd):(x.uDer!=null?`<span class="mut" title="Calculado: Bs ÷ tasa">${cu+fmt2.format(x.uDer)}</span>`:(empty?'<span class="mut">pago compartido</span>':'')))}${XX.length&&x.tusd!=null?`<span class="xsub">Total con ${XX.length} adic.: <b>${cu+fmt2.format(x.tusd)}</b></span>`:''}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs!=null?`<span class="xsub">Total: <b>${fmt2.format(x.tbs)}</b></span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(netOf(x.tbs,hotelPct(x.hotel)))}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
         }
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
@@ -851,6 +854,8 @@ function render(){
     <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
     <td>${stLimpio(x.status)?`<span class="chip ${chipClass(x.status)}">${esc(stLimpio(x.status))}</span>`:''}${isNoShow(x)?' <span class="chip bad">NO SHOW</span>':''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
     }
+    for(const x of run) (x.xs||[]).forEach((e,k)=>{ const xk=x.slug+'|'+x.id+'|'+k, cu=x.moneda==='EUR'?'€ ':'$ ';
+      html.push(`<tr class="xrowsub" data-x="${esc(xk)}" data-id="${esc(x.slug+'|'+x.id)}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar factura adicional" ${selX.has(xk)?'checked':''}></td>`:''}<td class="hotel"></td><td colspan="${COLS.length-1}"><span class="xline">↳ <b>${esc(e.c||'Factura adicional')}</b>${e.n?` · Factura <b>${esc(e.n)}</b>`:''} · ${esc(x.pasajero||'')} · ${e.u!=null?cu+fmt2.format(e.u):'—'}${e.b!=null?` · Bs ${fmt2.format(e.b)}`:''} · <span class="chip ${e.pend?'warn':'ok'}">${e.pend?'POR PAGAR':'PAGADO'}</span></span></td></tr>`) });
     i+=span-1;
   }
   $('#tbl tbody').innerHTML=html.join('');
@@ -897,12 +902,21 @@ function renderHotels(list){
 }
 
 /* ---------- shared payments ---------- */
-function updSel(){ const n=sel.size; $('#selbar').hidden=!n||view!=='reservas'; $('#selN').textContent=n===1?'1 reserva seleccionada':n+' reservas seleccionadas';
+function selParts(){ // reserva -> {hab, xs:[índices]}
+  const M=new Map(); const get=r=>{if(!M.has(r))M.set(r,{hab:false,xs:[]});return M.get(r)};
+  for(const k of sel){const r=rowByKey.get(k);if(r)get(r).hab=true}
+  for(const k of selX){const i=k.lastIndexOf('|'),r=rowByKey.get(k.slice(0,i));if(r&&(r.xs||[])[+k.slice(i+1)])get(r).xs.push(+k.slice(i+1))}
+  return M }
+function updSel(){ const n=sel.size, nx=selX.size; $('#selbar').hidden=(!n&&!nx)||view!=='reservas';
+  const M=selParts(), nr=M.size; $('#selN').textContent=[n?(n===1?'1 reserva':n+' reservas'):'',nx?(nx===1?'1 factura adicional':nx+' facturas adicionales'):''].filter(Boolean).join(' + ')+(n+nx===1?' seleccionada':' seleccionadas');
   const rs=[...sel].map(k=>rowByKey.get(k)).filter(Boolean);
   $('#grpBtn').disabled=n<2; $('#ungrpBtn').disabled=!rs.some(r=>r.grupo);
-  const S=(f,pred)=>rs.filter(pred||(()=>true)).reduce((a,r)=>a+(num(r[f])||0),0), E=r=>r.moneda==='EUR', U=r=>r.moneda!=='EUR';
-  const nN=S('noches'), u=S('tusd',U), e=S('tusd',E), b=S('tbs'), pu=S('pusd',U), pe=S('pusd',E), pb=S('pbs'), np=rs.filter(r=>r.isPend).length;
-  $('#selSum').innerHTML=n?[`<span>Noches: <b>${fmt0.format(nN)}</b></span>`,`<span>Total: <b>$ ${fmt2.format(u)}</b>${e?` · <b>€ ${fmt2.format(e)}</b>`:''} · <b>Bs ${fmt2.format(b)}</b></span>`,np?`<span>Por pagar (${np}): <b>$ ${fmt2.format(pu)}</b>${pe?` · <b>€ ${fmt2.format(pe)}</b>`:''} · <b>Bs ${fmt2.format(pb)}</b></span>`:''].join(''):''; }
+  let nN=0,u=0,e=0,b=0,pu=0,pe=0,pb=0,np=0;
+  for(const [r,P] of M){ const EU=r.moneda==='EUR'; let tu=0,tb=0,ppu=0,ppb=0,pend=false; if(P.hab) nN+=num(r.noches)||0;
+    if(P.hab){ tu+=r.hU||0; tb+=r.hB||0; if(r.hPend){ pend=true; const q=r.hPU!=null?r.hPU:(r.hU||0); ppu+=q; ppb+=r.tH&&q?q*r.tH:(r.hB||0) } }
+    for(const i of P.xs){ const x=r.xs[i]; tu+=x.u||0; tb+=x.b||0; if(x.pend){ pend=true; ppu+=x.u||0; ppb+=r.tH&&x.u?x.u*r.tH:(x.b||0) } }
+    if(EU){e+=tu;pe+=ppu}else{u+=tu;pu+=ppu} b+=tb; pb+=ppb; if(pend) np++ }
+  $('#selSum').innerHTML=(n||nx)?[`<span>Noches: <b>${fmt0.format(nN)}</b></span>`,`<span>Total: <b>$ ${fmt2.format(u)}</b>${e?` · <b>€ ${fmt2.format(e)}</b>`:''} · <b>Bs ${fmt2.format(b)}</b></span>`,np?`<span>Por pagar (${np}): <b>$ ${fmt2.format(pu)}</b>${pe?` · <b>€ ${fmt2.format(pe)}</b>`:''} · <b>Bs ${fmt2.format(pb)}</b></span>`:''].join(''):''; }
 async function setGroup(targets,gid){ // targets: [{slug,id}]
   const by={}; for(const t of targets)(by[t.slug]=by[t.slug]||{})[t.id]={grupo:gid};
   for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs});
@@ -949,16 +963,19 @@ $('#gtSave').onclick=async()=>{
 let imgBlob=null, imgName='';
 function selRows(){return [...sel].map(k=>rowByKey.get(k)).filter(Boolean)}
 async function buildPayImg(){
-  const rs=selRows().sort((a,b)=>a.hotel.localeCompare(b.hotel,'es')||(a.in||'').localeCompare(b.in||'')||String(a.pasajero||'').localeCompare(String(b.pasajero||''),'es'));
+  const PM=selParts(); const rs=[...PM.keys()].sort((a,b)=>a.hotel.localeCompare(b.hotel,'es')||(a.in||'').localeCompare(b.in||'')||String(a.pasajero||'').localeCompare(String(b.pasajero||''),'es'));
   const showBs=$('#iBs').checked, byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
   const X0=36, S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
   const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
   const tk=v=>String(v||'').split(/[\s,;\/]+/).map(t=>t.trim()).filter(Boolean);
   const sIdx=new Map(), singleIdx=h=>{ if(!sIdx.has(h)){ const S=new Set(); for(const x of rows) if(x.hotel===h){ const t=tk(x.factura); if(t.length===1) S.add(t[0]) } sIdx.set(h,S) } return sIdx.get(h) };
-  const fac1=r=>{ let own=tk(r.factura);
+  const habFac=r=>{ let own=tk(r.factura);
     if(own.length>1){ const oth=singleIdx(r.hotel); const k=own.filter(t=>!oth.has(t)); if(k.length) own=k; }
-    return [...own,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero).filter(Boolean).map(String):[])] };
-  const facMemo=new Map(), facOf=r=>{if(facMemo.has(r))return facMemo.get(r);let L=fac1(r);if(!L.length&&r.grupo){const G=[...new Set(grpOf(r.grupo).flatMap(fac1))];if(G.length===1)L=G}const v=L.join(', ');facMemo.set(r,v);return v};
+    return own };
+  const facMemo=new Map(), facOf=r=>{if(facMemo.has(r))return facMemo.get(r);const P=PM.get(r)||{hab:true,xs:[]};let L=[];
+    if(P.hab){L=habFac(r);if(!L.length&&r.grupo){const G=[...new Set(grpOf(r.grupo).flatMap(habFac))];if(G.length===1)L=G}}
+    for(const i of P.xs){const x=r.xs[i];if(x&&x.n)L.push(x.n+(P.hab?'':(x.c?' ('+x.c.toLowerCase()+')':'')))}
+    const v=L.join(', ');facMemo.set(r,v);return v};
   const hasF=rs.some(r=>facOf(r));
   const C=[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
   if(hasF) C.push(['fac','Factura',118,'c']); C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',140,'r']);
@@ -967,11 +984,14 @@ async function buildPayImg(){
   const wrap=(t,mw,font)=>{g.font=font;const out=[];let line='';for(const w of String(t||'').split(/\s+/)){const tst=line?line+' '+w:w;if(g.measureText(tst).width>mw&&line){out.push(line);line=w}else line=tst}if(line)out.push(line);return out.length?out:['']};
   // Monto por pasajero: en un pago compartido el total se reparte entre las reservas (por tarifa × noches o, si no hay tarifa, por noches).
   const share=new Map(), shareB=new Map(); let repartido=false;
-  for(const gid of new Set(rs.filter(r=>r.grupo).map(r=>r.grupo))){ const M=grpOf(gid); const TU=M.reduce((a,x)=>a+(x.tusd||0),0), TB=M.reduce((a,x)=>a+(x.tbs||0),0);
+  for(const gid of new Set(rs.filter(r=>r.grupo).map(r=>r.grupo))){ const M=grpOf(gid); const TU=M.reduce((a,x)=>a+(x.hU||0),0), TB=M.reduce((a,x)=>a+(x.hB||0),0);
     const allT=M.every(x=>num(x.tarifa)&&num(x.noches)); const w=x=>allT?x.tarifa*x.noches:(num(x.noches)||1); const SW=M.reduce((a,x)=>a+w(x),0)||1;
     for(const x of M){ share.set(x,TU?Math.round(TU*w(x)/SW*100)/100:null); shareB.set(x,TB?Math.round(TB*w(x)/SW*100)/100:null) } if(M.length>1) repartido=true }
-  const uOf=r=>share.has(r)?share.get(r):(r.tusd!=null?r.tusd:(r.tbs!=null&&num(r.bcv)?Math.round(r.tbs/r.bcv*100)/100:(num(r.tarifa)&&num(r.noches)?r.tarifa*r.noches:null)));
-  const bOf=r=>shareB.has(r)?shareB.get(r):r.tbs;
+  const habU=r=>share.has(r)?share.get(r):(r.hU!=null?r.hU:(num(r.tarifa)&&num(r.noches)?r.tarifa*r.noches:null)), habB=r=>shareB.has(r)?shareB.get(r):r.hB;
+  const sumX=(r,f)=>{const P=PM.get(r);if(!P)return null;let t=null;for(const i of P.xs){const v=r.xs[i]&&r.xs[i][f];if(v!=null)t=(t||0)+v}return t};
+  const add=(a,c)=>a==null&&c==null?null:Math.round(((a||0)+(c||0))*100)/100;
+  const uOf=r=>add((PM.get(r)||{hab:true}).hab?habU(r):null,sumX(r,'u'));
+  const bOf=r=>add((PM.get(r)||{hab:true}).hab?habB(r):null,sumX(r,'b'));
   const amt=r=>{const v=uOf(r);if(v==null)return '—';return (r.moneda==='EUR'?'€ ':'$ ')+fmt2.format(v)};
   // measure
   let H=150; const plan=[];
@@ -1006,7 +1026,7 @@ async function buildPayImg(){
   let can=false; try{ can=!!(navigator.canShare&&navigator.canShare({files:[new File([imgBlob],imgName,{type:'image/jpeg'})]})) }catch(e){} $('#iShare').hidden=!can;
   $('#iCopy').hidden=!(navigator.clipboard&&window.ClipboardItem);
 }
-async function openImg(){ if(!sel.size){toast('Selecciona las reservas primero.');return} $('#scrim').hidden=false; $('#isheet').hidden=false; try{await buildPayImg()}catch(e){toast('No se pudo generar la imagen.')} }
+async function openImg(){ if(!sel.size&&!selX.size){toast('Selecciona las reservas primero.');return} $('#scrim').hidden=false; $('#isheet').hidden=false; try{await buildPayImg()}catch(e){toast('No se pudo generar la imagen.')} }
 function closeImg(){ $('#isheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true }
 $('#imgBtn').onclick=openImg; $('#iClose').onclick=closeImg; $('#iBs').addEventListener('change',buildPayImg);
 $('#iDown').onclick=async()=>{ if(!imgBlob)return; await saveFile(imgName,new Uint8Array(await imgBlob.arrayBuffer())) };
@@ -1299,15 +1319,15 @@ async function exportXlsx(){
 ['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
 ['#q','#fFac','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'||s==='#fFac'?'input':'change',()=>{page=0;render()}));
 $('#clearBtn').onclick=()=>{$('#q').value='';$('#fFac').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
-$('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k)}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
+$('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k);(r.xs||[]).forEach((x,i)=>{on?selX.add(k+'|'+i):selX.delete(k+'|'+i)})}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
 $('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
 try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
-$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k);updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
+$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;if(tr.dataset.x){const k=tr.dataset.x;cb.checked?selX.add(k):selX.delete(k)}else{const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k)}updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
 $('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
 function setView(v){view=v;page=0;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));$('#view-reservas').hidden=v!=='reservas';$('#view-hoteles').hidden=v!=='hoteles';$('#view-reportes').hidden=v!=='reportes';$('#view-creditos').hidden=v!=='creditos';$('#view-conc').hidden=v!=='conc';$('#filters').hidden=v==='reportes'||v==='creditos'||v==='conc';$('#summary').hidden=v==='reportes'||v==='creditos'||v==='conc';render();updSel()}
 $('#newBtn').onclick=()=>openSheet(null);
-$('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();render()};
+$('#grpBtn').onclick=groupSelected; $('#ungrpBtn').onclick=ungroupSelected; $('#selClear').onclick=()=>{sel.clear();selX.clear();render()};
 $('#newHotelBtn').onclick=()=>openHotel(null);
 $('#hClose').onclick=closeHotel; $('#hCancel').onclick=closeHotel; $('#hSave').onclick=saveHotel; $('#hform').addEventListener('submit',e=>{e.preventDefault();saveHotel()});
 $('#closeBtn').onclick=closeSheet; $('#cancelBtn').onclick=closeSheet; $('#scrim').onclick=()=>{closeSheet();closeHotel();closeC();closeP();closeT();closeK();closeGT();closeImg();closeMv()};
