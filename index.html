@@ -989,7 +989,8 @@ async function buildPayImg(){
   const share=new Map(), shareB=new Map(); let repartido=false;
   for(const gid of new Set(rs.filter(r=>r.grupo).map(r=>r.grupo))){ const M=grpOf(gid); const TU=M.reduce((a,x)=>a+(x.hU||0),0), TB=M.reduce((a,x)=>a+(x.hB||0),0);
     const allT=M.every(x=>num(x.tarifa)&&num(x.noches)); const w=x=>allT?x.tarifa*x.noches:(num(x.noches)||1); const SW=M.reduce((a,x)=>a+w(x),0)||1;
-    for(const x of M){ share.set(x,TU?Math.round(TU*w(x)/SW*100)/100:null); shareB.set(x,TB?Math.round(TB*w(x)/SW*100)/100:null) } if(M.length>1) repartido=true }
+    const ownU=M.every(x=>x.hU!=null), ownB=M.every(x=>x.hB!=null);
+    for(const x of M){ share.set(x,ownU?x.hU:(TU?Math.round(TU*w(x)/SW*100)/100:null)); shareB.set(x,ownB?x.hB:(TB?Math.round(TB*w(x)/SW*100)/100:null)) } if(M.length>1&&(!ownU||!ownB)) repartido=true }
   const habU=r=>share.has(r)?share.get(r):(r.hU!=null?r.hU:(num(r.tarifa)&&num(r.noches)?r.tarifa*r.noches:null)), habB=r=>shareB.has(r)?shareB.get(r):r.hB;
   const sumX=(r,f)=>{const P=PM.get(r);if(!P)return null;let t=null;for(const i of P.xs){const v=r.xs[i]&&r.xs[i][f];if(v!=null)t=(t||0)+v}return t};
   const add=(a,c)=>a==null&&c==null?null:Math.round(((a||0)+(c||0))*100)/100;
