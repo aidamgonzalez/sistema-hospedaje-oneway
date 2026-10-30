@@ -643,7 +643,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <aside class="sheet" id="isheet" hidden aria-labelledby="iTitle">
   <header><h2 id="iTitle">Imagen para el hotel</h2><button class="ghost" id="iClose" type="button" aria-label="Cerrar">✕</button></header>
   <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:12px;padding:16px 20px">
-    <label class="check"><input type="checkbox" id="iBs"> Mostrar también el monto en Bs</label>
+    <div class="f"><label for="iMon">Montos a mostrar</label><select id="iMon"><option value="usd">Solo monto en $</option><option value="bs">Solo monto en Bs</option><option value="ambos">Ambos ($ y Bs)</option></select></div>
     <p class="hint" style="margin:0">Revisa la imagen antes de enviarla. Se genera con las reservas que tienes seleccionadas.</p>
     <img id="iPrev" alt="Vista previa de la relación de pago" style="width:100%;border:1px solid var(--line);border-radius:10px;background:#fff">
   </div>
@@ -967,7 +967,7 @@ let imgBlob=null, imgName='';
 function selRows(){return [...sel].map(k=>rowByKey.get(k)).filter(Boolean)}
 async function buildPayImg(){
   const PM=selParts(); const rs=[...PM.keys()].sort((a,b)=>a.hotel.localeCompare(b.hotel,'es')||(a.in||'').localeCompare(b.in||'')||String(a.pasajero||'').localeCompare(String(b.pasajero||''),'es'));
-  const showBs=$('#iBs').checked, byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
+  const iM=$('#iMon').value||'usd', showU=iM!=='bs', showBs=iM!=='usd', byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
   const X0=36, S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
   const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
   const tk=v=>String(v||'').split(/[\s,;\/]+/).map(t=>t.trim()).filter(Boolean);
@@ -981,7 +981,7 @@ async function buildPayImg(){
     const v=L.join(', ');facMemo.set(r,v);return v};
   const hasF=rs.some(r=>facOf(r));
   const C=[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
-  if(hasF) C.push(['fac','Factura',118,'c']); C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',140,'r']);
+  if(hasF) C.push(['fac','Factura',118,'c']); if(showU) C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',showU?140:160,'r']);
   C[1][2]=928-C.reduce((a,c)=>a+c[2],0); const cols=C.map(c=>[c[1],c[2],c[3],c[0]]), ix=k=>cols.findIndex(c=>c[3]===k), xOf=k=>X0+cols.slice(0,ix(k)).reduce((a,c)=>a+c[1],0), wOf=k=>cols[ix(k)][1];
   const cv=document.createElement('canvas'), g=cv.getContext('2d'), F=(w,sz)=>`${w} ${sz}px system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
   const wrap=(t,mw,font)=>{g.font=font;const out=[];let line='';for(const w of String(t||'').split(/\s+/)){const tst=line?line+' '+w:w;if(g.measureText(tst).width>mw&&line){out.push(line);line=w}else line=tst}if(line)out.push(line);return out.length?out:['']};
@@ -1016,11 +1016,11 @@ async function buildPayImg(){
       g.fillStyle=INK; g.font=F(400,16); put(String(i+1),'n',cy,'c'); put(fd(r.in),'in',cy,'c'); put(fd(r.out),'out',cy,'c'); put(r.noches!=null?String(r.noches):'','noc',cy,'c');
       g.font=F(600,17); lines.forEach((ln,j)=>g.fillText(ln,xOf('pax')+10,cy-(lines.length-1)*11+j*22));
       if(hasF){ g.font=F(500,15); g.fillStyle=INK; fl.forEach((ln,j)=>put(ln,'fac',cy-(fl.length-1)*9+j*18,'c')); g.fillStyle=INK }
-      g.font=F(700,16); put(amt(r),'mon',cy,'r'); if(showBs){ g.font=F(400,16); put(bOf(r)!=null?fmt2.format(bOf(r)):'—','bs',cy,'r') }
+      if(showU){ g.font=F(700,16); put(amt(r),'mon',cy,'r') } if(showBs){ g.font=F(showU?400:700,16); put(bOf(r)!=null?(showU?'':'Bs ')+fmt2.format(bOf(r)):'—','bs',cy,'r') }
       tn+=num(r.noches)||0; if(r.moneda==='EUR')te+=uOf(r)||0; else tu+=uOf(r)||0; tb+=bOf(r)||0; y+=rh });
     g.fillStyle='#f1e7d6'; g.fillRect(X0,y,TW,46); g.fillStyle=SAND; g.fillRect(X0,y,TW,2);
     g.font=F(800,17); g.fillStyle=NAVY; g.fillText(`TOTAL · ${rws.length} reserva${rws.length>1?'s':''}`,X0+10,y+23);
-    put(fmt0.format(tn),'noc',y+23,'c'); put((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),'mon',y+23,'r'); if(showBs) put(fmt2.format(tb),'bs',y+23,'r');
+    put(fmt0.format(tn),'noc',y+23,'c'); if(showU) put((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),'mon',y+23,'r'); if(showBs) put((showU?'':'Bs ')+fmt2.format(tb),'bs',y+23,'r');
     y+=46+26 }
   g.font=F(400,12); g.fillStyle=MUT; g.fillText('Generado por el Sistema de Hospedaje · One Way Travel Agency',X0,H-24); if(repartido){g.textAlign='right';g.fillText('Pago compartido: monto repartido por tarifa y noches de cada reserva',W-36,H-24);g.textAlign='left'}
   imgBlob=await new Promise(res=>cv.toBlob(res,'image/jpeg',0.92));
@@ -1031,7 +1031,8 @@ async function buildPayImg(){
 }
 async function openImg(){ if(!sel.size&&!selX.size){toast('Selecciona las reservas primero.');return} $('#scrim').hidden=false; $('#isheet').hidden=false; try{await buildPayImg()}catch(e){toast('No se pudo generar la imagen.')} }
 function closeImg(){ $('#isheet').hidden=true; if($('#sheet').hidden) $('#scrim').hidden=true }
-$('#imgBtn').onclick=openImg; $('#iClose').onclick=closeImg; $('#iBs').addEventListener('change',buildPayImg);
+$('#imgBtn').onclick=openImg; $('#iClose').onclick=closeImg; $('#iMon').addEventListener('change',()=>{try{localStorage.setItem('img-montos',$('#iMon').value)}catch(e){}buildPayImg()});
+try{const v=localStorage.getItem('img-montos');if(v)$('#iMon').value=v}catch(e){}
 $('#iDown').onclick=async()=>{ if(!imgBlob)return; await saveFile(imgName,new Uint8Array(await imgBlob.arrayBuffer())) };
 $('#iShare').onclick=async()=>{ try{ await navigator.share({files:[new File([imgBlob],imgName,{type:'image/jpeg'})],title:imgName}) }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo compartir; usa Descargar.') } };
 $('#iCopy').onclick=async()=>{ try{ const bm=await createImageBitmap(imgBlob), c2=document.createElement('canvas'); c2.width=bm.width; c2.height=bm.height; c2.getContext('2d').drawImage(bm,0,0); const png=await new Promise(res=>c2.toBlob(res,'image/png')); await navigator.clipboard.write([new ClipboardItem({'image/png':png})]); toast('Imagen copiada: pégala en WhatsApp o en el correo') }catch(e){ toast('No se pudo copiar; usa Descargar.') } };
@@ -1089,12 +1090,13 @@ function renderGbox(){
   if(pendingGroup){ const base=pendingGroup.anchor; box.innerHTML=`<b>Pago compartido</b><span class="hint">Esta reserva se une al pago de ${esc(base.pasajero)}${mem.length?' y '+(mem.length-1)+' más':''}. Si el monto ya está en esa reserva, deja los montos vacíos aquí.</span>`; return }
   if(!mem.length){ box.innerHTML=`<div class="row"><span class="hint">¿Este monto cubre otras reservas?</span><button type="button" id="gAdd">+ Añadir otra reserva a este pago</button></div>`; }
   else{
-    const su=mem.reduce((s,y)=>s+(num(y.usd)||0),0), sb=mem.reduce((s,y)=>s+(num(y.bs)||0),0), cur=mem[0].moneda==='EUR'?'€ ':'$ ';
+    const su=mem.reduce((s,y)=>s+(y.hU||0),0), sb=mem.reduce((s,y)=>s+(y.hB||0),0), cur=mem[0].moneda==='EUR'?'€ ':'$ ';
     box.innerHTML=`<b>Pago compartido · ${mem.length} reservas</b><span class="hint">Total del pago: ${cur}${fmt2.format(su)} · Bs ${fmt2.format(sb)}${(()=>{const f=mem.map(y=>y.fecha_pago).find(Boolean);return f?' · pagado el '+fd(f):''})()}</span>
       <ul>${mem.sort((a,b)=>(a.in||'')<(b.in||'')?-1:1).map(m=>`<li>${esc(m.pasajero)} · ${fd(m.in)}–${fd(m.out)}${m.id===editing.id?' <b>(esta)</b>':''}</li>`).join('')}</ul>
-      <div class="row"><button type="button" class="primary" id="gTot">Colocar monto total</button><button type="button" id="gAdd">+ Añadir otra reserva a este pago</button><button type="button" id="gOut">Quitar esta reserva del pago</button></div>`;
+      <div class="row"><button type="button" class="primary" id="gTot">Colocar monto total</button><button type="button" id="gImg">🖼 Imagen para el hotel</button><button type="button" id="gAdd">+ Añadir otra reserva a este pago</button><button type="button" id="gOut">Quitar esta reserva del pago</button></div>`;
   }
   $('#gAdd')&&($('#gAdd').onclick=()=>{ const a=editing; pendingGroup={gid:a.grupo||('g'+Date.now().toString(36)),anchor:a}; const keep={hotel:a.hotel,contrato:a.contrato,status:a.status,obs:a.obs,in:a.in,out:a.out,noches:a.noches,bcv:a.bcv}; openSheet(null,keep) });
+  $('#gImg')&&($('#gImg').onclick=()=>{ sel.clear(); selX.clear(); for(const y of rows.filter(r=>r.grupo===g)) sel.add(y.slug+'|'+y.id); closeSheet(); render(); openImg() });
   $('#gTot')&&($('#gTot').onclick=()=>openGTotal(rows.filter(r=>r.grupo===g),true));
   $('#gOut')&&($('#gOut').onclick=async()=>{ try{ await setGroup([editing],null); editing={...editing,grupo:null}; toast('Reserva quitada del pago compartido.'); renderGbox() }catch(e){ toast('No se pudo quitar del pago.') } });
 }
