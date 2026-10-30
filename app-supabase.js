@@ -153,7 +153,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const bar = document.querySelector('header.top .bar');
     const box = document.createElement('div'); box.className = 'ubox';
-    box.innerHTML = '<span class="uname" title="Versión del sistema">v 29/10 suma facturas</span><span id="uName" class="uname"></span><button type="button" id="uBtn" hidden>Usuarios</button><button type="button" id="uOut" class="ghost">Salir</button>';
+    box.innerHTML = '<span class="uname" title="Versión del sistema">v 30/10 más rápido</span><span id="uName" class="uname"></span><button type="button" id="uBtn" hidden>Usuarios</button><button type="button" id="uOut" class="ghost">Salir</button>';
     bar.appendChild(box);
     $('#uOut').onclick = () => sb && sb.auth.signOut();
     $('#uBtn').onclick = openUsers;

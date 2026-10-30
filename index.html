@@ -693,7 +693,7 @@ let rows=[];        // flattened {id, slug, hotel, ...}
 let year=2026, anios=[2026], unsub=null;
 try{const y=parseInt(localStorage.getItem('hosp-year'));if(y)year=y}catch(e){}
 let sel=new Set(), gsize={}, pendingGroup=null;
-let curList=[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
+let curList=[], rowByKey=new Map(), grpMap=new Map(); const grpOf=g=>grpMap.get(g)||[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
 const fmt2=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt0=new Intl.NumberFormat('es-VE');
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -769,7 +769,8 @@ function rebuild(){
     const RP=[]; if(num(r.bs)) RP.push(!!r.ret_ok); X.forEach(e=>{if(num(e.bs)) RP.push(!!e.ret_ok)});
     r.retAplica=pc>0&&RP.length>0; r.retPend=r.retAplica&&RP.some(v=>!v); r.retDone=r.retAplica&&RP.every(v=>v);
   }
-  rows=out; for(const k of [...sel]) if(!rows.some(r=>r.slug+'|'+r.id===k)) sel.delete(k); fillFilters(); render();
+  rows=out; rowByKey=new Map(); grpMap=new Map(); for(const r of out){ rowByKey.set(r.slug+'|'+r.id,r); if(r.grupo){ if(!grpMap.has(r.grupo)) grpMap.set(r.grupo,[]); grpMap.get(r.grupo).push(r) } }
+  for(const k of [...sel]) if(!rowByKey.has(k)) sel.delete(k); fillFilters(); render();
 }
 function uniq(f){const c={};for(const r of rows){const v=r[f];if(v)c[v]=(c[v]||0)+1}return Object.keys(c).sort((a,b)=>c[b]-c[a])}
 function fillSelect(id,vals,labeler){const el=$(id),cur=el.value;el.innerHTML='<option value="">Todos</option>'+vals.map(v=>`<option value="${esc(v)}">${esc(labeler?labeler(v):v)}</option>`).join('');if(vals.includes(cur))el.value=cur}
@@ -897,7 +898,7 @@ function renderHotels(list){
 
 /* ---------- shared payments ---------- */
 function updSel(){ const n=sel.size; $('#selbar').hidden=!n||view!=='reservas'; $('#selN').textContent=n===1?'1 reserva seleccionada':n+' reservas seleccionadas';
-  const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean);
+  const rs=[...sel].map(k=>rowByKey.get(k)).filter(Boolean);
   $('#grpBtn').disabled=n<2; $('#ungrpBtn').disabled=!rs.some(r=>r.grupo);
   const S=(f,pred)=>rs.filter(pred||(()=>true)).reduce((a,r)=>a+(num(r[f])||0),0), E=r=>r.moneda==='EUR', U=r=>r.moneda!=='EUR';
   const nN=S('noches'), u=S('tusd',U), e=S('tusd',E), b=S('tbs'), pu=S('pusd',U), pe=S('pusd',E), pb=S('pbs'), np=rs.filter(r=>r.isPend).length;
@@ -907,7 +908,7 @@ async function setGroup(targets,gid){ // targets: [{slug,id}]
   for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs});
 }
 async function groupSelected(){
-  const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean); if(rs.length<2) return;
+  const rs=[...sel].map(k=>rowByKey.get(k)).filter(Boolean); if(rs.length<2) return;
   const gid=rs.find(r=>r.grupo)?.grupo||('g'+Date.now().toString(36));
   try{ await setGroup(rs,gid); sel.clear(); const all=rows.filter(r=>r.grupo===gid); for(const r of rs) if(!all.includes(r)) all.push(r); openGTotal(all.map(r=>({...r,grupo:gid})).filter((r,i,a)=>a.findIndex(x=>x.slug===r.slug&&x.id===r.id)===i)) }catch(e){ toast('No se pudo unir el pago. Inténtalo de nuevo.') }
 }
@@ -946,17 +947,18 @@ $('#gtSave').onclick=async()=>{
   catch(e){ toast('No se pudo guardar el monto. Inténtalo de nuevo.') }
 };
 let imgBlob=null, imgName='';
-function selRows(){return [...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(Boolean)}
+function selRows(){return [...sel].map(k=>rowByKey.get(k)).filter(Boolean)}
 async function buildPayImg(){
   const rs=selRows().sort((a,b)=>a.hotel.localeCompare(b.hotel,'es')||(a.in||'').localeCompare(b.in||'')||String(a.pasajero||'').localeCompare(String(b.pasajero||''),'es'));
   const showBs=$('#iBs').checked, byH={}; for(const r of rs)(byH[r.hotel]=byH[r.hotel]||[]).push(r);
   const X0=36, S=2, W=1000, NAVY='#10283f', SAND='#c9995f', INK='#16283a', MUT='#5d6f80', LINE='#e3d9c8';
   const ML=rs.every(r=>r.moneda==='EUR')?'Monto €':rs.some(r=>r.moneda==='EUR')?'Monto $/€':'Monto $';
   const tk=v=>String(v||'').split(/[\s,;\/]+/).map(t=>t.trim()).filter(Boolean);
+  const sIdx=new Map(), singleIdx=h=>{ if(!sIdx.has(h)){ const S=new Set(); for(const x of rows) if(x.hotel===h){ const t=tk(x.factura); if(t.length===1) S.add(t[0]) } sIdx.set(h,S) } return sIdx.get(h) };
   const fac1=r=>{ let own=tk(r.factura);
-    if(own.length>1){ const oth=new Set(rows.filter(x=>x!==r&&upN(x.hotel)===upN(r.hotel)).flatMap(x=>tk(x.factura).length===1?tk(x.factura):[])); const k=own.filter(t=>!oth.has(t)); if(k.length) own=k; }
+    if(own.length>1){ const oth=singleIdx(r.hotel); const k=own.filter(t=>!oth.has(t)); if(k.length) own=k; }
     return [...own,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero).filter(Boolean).map(String):[])] };
-  const facOf=r=>{let L=fac1(r);if(!L.length&&r.grupo){const G=[...new Set(rows.filter(x=>x.grupo===r.grupo).flatMap(fac1))];if(G.length===1)L=G}return L.join(', ')};
+  const facMemo=new Map(), facOf=r=>{if(facMemo.has(r))return facMemo.get(r);let L=fac1(r);if(!L.length&&r.grupo){const G=[...new Set(grpOf(r.grupo).flatMap(fac1))];if(G.length===1)L=G}const v=L.join(', ');facMemo.set(r,v);return v};
   const hasF=rs.some(r=>facOf(r));
   const C=[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
   if(hasF) C.push(['fac','Factura',118,'c']); C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',140,'r']);
@@ -965,7 +967,7 @@ async function buildPayImg(){
   const wrap=(t,mw,font)=>{g.font=font;const out=[];let line='';for(const w of String(t||'').split(/\s+/)){const tst=line?line+' '+w:w;if(g.measureText(tst).width>mw&&line){out.push(line);line=w}else line=tst}if(line)out.push(line);return out.length?out:['']};
   // Monto por pasajero: en un pago compartido el total se reparte entre las reservas (por tarifa × noches o, si no hay tarifa, por noches).
   const share=new Map(), shareB=new Map(); let repartido=false;
-  for(const gid of new Set(rs.filter(r=>r.grupo).map(r=>r.grupo))){ const M=rows.filter(x=>x.grupo===gid); const TU=M.reduce((a,x)=>a+(x.tusd||0),0), TB=M.reduce((a,x)=>a+(x.tbs||0),0);
+  for(const gid of new Set(rs.filter(r=>r.grupo).map(r=>r.grupo))){ const M=grpOf(gid); const TU=M.reduce((a,x)=>a+(x.tusd||0),0), TB=M.reduce((a,x)=>a+(x.tbs||0),0);
     const allT=M.every(x=>num(x.tarifa)&&num(x.noches)); const w=x=>allT?x.tarifa*x.noches:(num(x.noches)||1); const SW=M.reduce((a,x)=>a+w(x),0)||1;
     for(const x of M){ share.set(x,TU?Math.round(TU*w(x)/SW*100)/100:null); shareB.set(x,TB?Math.round(TB*w(x)/SW*100)/100:null) } if(M.length>1) repartido=true }
   const uOf=r=>share.has(r)?share.get(r):(r.tusd!=null?r.tusd:(r.tbs!=null&&num(r.bcv)?Math.round(r.tbs/r.bcv*100)/100:(num(r.tarifa)&&num(r.noches)?r.tarifa*r.noches:null)));
@@ -1053,7 +1055,7 @@ $('#mSave').onclick=async()=>{
   }catch(e){ toast('No se pudo cambiar de hotel. Inténtalo de nuevo.') } finally{ btn.disabled=false }
 };
 async function ungroupSelected(){
-  const rs=[...sel].map(k=>rows.find(r=>r.slug+'|'+r.id===k)).filter(r=>r&&r.grupo);
+  const rs=[...sel].map(k=>rowByKey.get(k)).filter(r=>r&&r.grupo);
   try{ await setGroup(rs,null); sel.clear(); toast('Reservas separadas del pago compartido.') }catch(e){ toast('No se pudo separar. Inténtalo de nuevo.') }
 }
 function renderGbox(){
@@ -1355,7 +1357,7 @@ function reportData(){
   // shared payments: show group total once
   const seen=new Set();
   const items=rs.map(r=>{let usd=vU(r),bs=vB(r),nota=(r.facturas||[]).length?`Incluye ${(r.facturas||[]).length} factura(s) adicional(es)`:'';
-    if(r.grupo){const mem=rows.filter(x=>x.grupo===r.grupo);
+    if(r.grupo){const mem=grpOf(r.grupo);
       if(seen.has(r.grupo)){usd=null;bs=null;nota='Incluido en el pago compartido'}
       else{seen.add(r.grupo);usd=mem.reduce((s,x)=>s+(vU(x)||0),0)||null;bs=mem.reduce((s,x)=>s+(vB(x)||0),0)||null;nota='Pago compartido de '+mem.length+' reservas'}}
     const pc=hotelPct(r.hotel), rr=retOf(bs,pc); if(r.retAplica) nota=[nota,r.retDone?'Retención lista':'Retención pendiente'].filter(Boolean).join(' · '); return {...r,rusd:usd,rbs:bs,nota,pct:pc,rret:rr||null,rislr:islrOf(bs,pc)||null,rnet:bs?netOf(bs,pc):null}});
