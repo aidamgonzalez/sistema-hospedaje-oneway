@@ -125,7 +125,7 @@
         const { data, error } = await conTiempo(sb.auth.signInWithPassword({ email, password: $('#lPass').value }), 15000, 'clave');
         $('#loginMsg').style.color = '';
         if (error) {
-          $('#loginMsg').textContent = /invalid login|invalid_credentials|invalid credentials/i.test(error.message) ? 'Correo o contraseña incorrectos. Revisa que no haya espacios ni mayúsculas de más.' : (/confirm/i.test(error.message) ? 'Tu correo aún no está confirmado.' : 'No se pudo iniciar sesión: ' + error.message);
+          $('#loginMsg').textContent = /invalid login|invalid_credentials|invalid credentials/i.test(error.message) ? 'Correo o contraseña incorrectos. Revisa que no haya espacios ni mayúsculas de más.' : (/confirm/i.test(error.message) ? 'Tu correo aún no está confirmado.' : (/failed to fetch|networkerror|load failed/i.test(error.message) ? 'Este equipo no logra conectarse con el servidor de la base de datos (Failed to fetch). Prueba con otra red (por ejemplo, datos del teléfono), desactiva bloqueadores de anuncios, VPN o antivirus web, o usa otro navegador.' : 'No se pudo iniciar sesión: ' + error.message));
         } else if (data && data.session) { await entrar(data.session); }
       } catch (err) { $('#loginMsg').style.color = ''; $('#loginMsg').textContent = /TIEMPO:clave/.test(err && err.message) ? 'El servidor no respondió al verificar la contraseña (paso 1). Revisa tu internet y vuelve a intentar.' : 'No se pudo conectar: ' + (err && err.message || err) + '. Revisa tu internet e inténtalo de nuevo.'; }
       finally { $('#lBtn').disabled = false; $('#lBtn').textContent = 'Entrar'; }
@@ -160,7 +160,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const bar = document.querySelector('header.top .bar');
     const box = document.createElement('div'); box.className = 'ubox';
-    box.innerHTML = '<span class="uname" title="Versión del sistema">v 02/11 resumen selección</span><span id="uName" class="uname"></span><button type="button" id="uBtn" hidden>Usuarios</button><button type="button" id="uOut" class="ghost">Salir</button>';
+    box.innerHTML = '<span class="uname" title="Versión del sistema">v 02/11 aviso conexión</span><span id="uName" class="uname"></span><button type="button" id="uBtn" hidden>Usuarios</button><button type="button" id="uOut" class="ghost">Salir</button>';
     bar.appendChild(box);
     $('#uOut').onclick = () => sb && sb.auth.signOut();
     $('#uBtn').onclick = openUsers;
