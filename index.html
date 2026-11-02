@@ -254,6 +254,10 @@ tr.ingroup td.pax{box-shadow:inset 3px 0 0 var(--sand)}
 .mvhist{background:var(--info-bg);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5}.mvhist b{color:var(--info)}.mvhist div+div{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
 .mvchip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:#fdecd2;color:#8a5a14;white-space:nowrap}
 tr.xrowsub td{background:var(--surface-2);padding-top:4px;padding-bottom:4px;border-top:0}tr.xrowsub .xline{font-size:12.5px;color:var(--ink-2,#3b4b5c)}tr.xrowsub .chip{font-size:10px;padding:1px 6px}
+.notas .qlabel{display:block;margin-bottom:6px}.nadd{display:flex;gap:8px;align-items:flex-end}.nadd textarea{flex:1;resize:vertical;min-height:44px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+.nota{position:relative;background:#fff8e6;border-left:3px solid var(--gold,#c9995f);border-radius:8px;padding:8px 32px 8px 10px;margin-bottom:6px;font-size:13.5px;line-height:1.45;white-space:pre-wrap}
+.nota small{display:block;color:var(--muted,#6b7a89);font-size:11px;margin-top:3px}.nota .ndel{position:absolute;top:4px;right:4px;border:0;background:none;color:var(--bad);padding:2px 6px;cursor:pointer}
+.notechip{display:inline-block;margin-left:6px;font-size:11px;cursor:help}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -537,6 +541,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f"><label for="eOut">Check-out</label><input id="eOut" type="date" required></div>
     <div class="f"><label for="eNoches">Noches</label><input id="eNoches" type="number" min="0" step="1"></div>
     <div class="f"><label for="eObs">Observación</label><input id="eObs" list="dlObs" placeholder="SIN COMIDAS, DESAYUNO…"></div>
+    <div class="notas full"><span class="qlabel">Notas</span><div id="nList"></div><div class="nadd"><textarea id="nTxt" rows="2" placeholder="Escribe una nota o comentario sobre esta reserva…"></textarea><button type="button" id="nAdd">Agregar nota</button></div></div>
     <div class="sec">Montos</div>
     <div class="gbox" id="gbox" hidden></div>
     <div class="mvhist full" id="mvHist" hidden></div>
@@ -803,7 +808,7 @@ function filtered(){
   const pend=$('#fPend').checked, fr=$('#fRet').value, fns=$('#fNS').value, ff=$('#fFac').value.trim().toUpperCase().replace(/^0+(?=\d)/,'');
   const facHit=r=>[r.factura,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero):[])].filter(Boolean).some(v=>String(v).split(/[\s,;\/]+/).some(t=>t.toUpperCase().replace(/^0+(?=\d)/,'').includes(ff)));
   return rows.filter(r=>inRange(r)&&(!ff||facHit(r))&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
-    (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel,(r.facturas||[]).map(e=>e.numero+' '+e.concepto).join(' ')].some(v=>v&&String(v).toUpperCase().includes(q))));
+    (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel,(r.notas||[]).map(n=>n.t).join(' '),(r.facturas||[]).map(e=>e.numero+' '+e.concepto).join(' ')].some(v=>v&&String(v).toUpperCase().includes(q))));
 }
 
 /* ---------- render ---------- */
@@ -855,7 +860,7 @@ function render(){
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
     <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
-    <td class="pax">${esc(x.pasajero)}${Array.isArray(x.cambios)&&x.cambios.length?`<span class="mvchip" title="${esc(x.cambios.map(c=>'De '+c.de+' → '+c.a+' ('+fd(c.fecha)+'): '+c.motivo).join(' | '))}">⇄ VIENE DE ${esc(x.cambios[x.cambios.length-1].de)}</span>`:''}${x.cambio_a?`<span class="mvchip" title="${esc(x.cambio_a.motivo)}">⇄ PASA A ${esc(x.cambio_a.a)} EL ${fd(x.cambio_a.fecha).slice(0,5)}</span>`:''}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
+    <td class="pax">${esc(x.pasajero)}${Array.isArray(x.notas)&&x.notas.length?`<span class="notechip" title="${esc(x.notas.map(n=>n.t).join('\n— '))}">📝${x.notas.length>1?x.notas.length:''}</span>`:''}${Array.isArray(x.cambios)&&x.cambios.length?`<span class="mvchip" title="${esc(x.cambios.map(c=>'De '+c.de+' → '+c.a+' ('+fd(c.fecha)+'): '+c.motivo).join(' | '))}">⇄ VIENE DE ${esc(x.cambios[x.cambios.length-1].de)}</span>`:''}${x.cambio_a?`<span class="mvchip" title="${esc(x.cambio_a.motivo)}">⇄ PASA A ${esc(x.cambio_a.a)} EL ${fd(x.cambio_a.fecha).slice(0,5)}</span>`:''}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
     <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
     <td>${stLimpio(x.status)?`<span class="chip ${chipClass(x.status)}">${esc(stLimpio(x.status))}</span>`:''}${isNoShow(x)?' <span class="chip bad">NO SHOW</span>':''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
     }
@@ -1143,7 +1148,7 @@ function openSheet(r,pre){
   dupUnit=null; if(pre&&pre.dup){ const nn=num(pre.noches); dupUnit=nn?{u:pre.tarifa??(pre.usd!=null?pre.usd/nn:null),b:pre.bs!=null&&pre.usd==null?pre.bs/nn:null}:null; $('#sheetTitle').textContent='Nueva reserva (copia)'; if(pre.pasajero) F.ePax.value=pre.pasajero }
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
   $('#delBtn').hidden=!r; $('#mvBtn').hidden=!r||!canWrite; $('#dupBtn').hidden=!r||!canWrite; $('#saveDupBtn').hidden=!!r||!canWrite||!!pendingGroup; renderMvHist(r); $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
-  $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot(); $('#aList').innerHTML=''; (r?.abonos||[]).forEach(e=>aRow(e)); aTot();
+  notas=Array.isArray(r?.notas)?[...r.notas]:[]; $('#nTxt').value=''; renderNotas(); $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot(); $('#aList').innerHTML=''; (r?.abonos||[]).forEach(e=>aRow(e)); aTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
   $('#saveBtn').disabled=!canWrite; $('#delBtn').disabled=!canWrite;
@@ -1252,12 +1257,18 @@ function collect(){
   const r={contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
   for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
   for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
-  const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null; r.mesfact=$('#eMesFact').value||null;
+  const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null; r.mesfact=$('#eMesFact').value||null; { const pend=$('#nTxt').value.trim(); if(pend){ notas=[...notas,{t:pend,por:(document.getElementById('uName')?.textContent||'').split(' · ')[0]||null,el:new Date().toISOString()}]; $('#nTxt').value='' } r.notas=notas.length?notas:null; }
   { const A=aRead(); r.abonos=A.length?A:null; const tot=parseFloat(F.eUsd.value), pu=A.reduce((s,e)=>s+(e.usd||0),0), su=(r.status||'').toUpperCase();
     if(A.length&&tot>0&&(!su||su==='POR PAGAR'||su==='PAGO PARCIAL'||su==='PAGADO')) r.status=pu>=tot-0.009?'PAGADO':'PAGO PARCIAL';
     else if(!A.length&&su==='PAGO PARCIAL') r.status='POR PAGAR'; }
   return r;
 }
+let notas=[];
+function renderNotas(){ $('#nList').innerHTML=notas.map((n,i)=>`<div class="nota">${esc(n.t)}<small>${n.por?esc(n.por)+' · ':''}${n.el?fd(n.el.slice(0,10))+' '+n.el.slice(11,16):''}</small>${canWrite?`<button type="button" class="ndel" data-i="${i}" aria-label="Borrar nota">✕</button>`:''}</div>`).join('') }
+async function saveNotasNow(){ if(!editing||!db) return; try{ await col().doc(editing.slug).update({rows:{[editing.id]:{notas:notas.length?notas:null}}}); editing={...editing,notas}; toast('Nota guardada') }catch(e){ toast('No se pudo guardar la nota.') } }
+$('#nAdd').onclick=async()=>{ const t=$('#nTxt').value.trim(); if(!t){$('#nTxt').focus();return}
+  notas=[...notas,{t,por:(document.getElementById('uName')?.textContent||'').split(' · ')[0]||null,el:new Date().toISOString()}]; $('#nTxt').value=''; renderNotas(); await saveNotasNow() };
+$('#nList').addEventListener('click',async e=>{ const b=e.target.closest('.ndel'); if(!b) return; notas=notas.filter((_,i)=>i!==+b.dataset.i); renderNotas(); await saveNotasNow() });
 let _dupNext=null, dupUnit=null;
 function dupRecalc(){ if(!dupUnit) return; const nn=parseFloat(F.eNoches.value); if(!(nn>0)) return; if(dupUnit.u!=null){ F.eUsd.value=(dupUnit.u*nn).toFixed(2); moneyBase='usd'; calcBs() } else if(dupUnit.b!=null){ F.eBs.value=(dupUnit.b*nn).toFixed(2); moneyBase='bs'; usdDesdeBs() } }
 function dupData(fromForm){ const v=x=>x.value.trim(), n=x=>{const f=parseFloat(x.value);return isFinite(f)?f:null};
