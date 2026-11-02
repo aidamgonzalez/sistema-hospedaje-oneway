@@ -1654,10 +1654,12 @@ async function saveDeuItems(patch){ // patch: {fecha_corte?, tasa?, items?:{id:o
 }
 async function savePagItem(id,obj){ const ref=db.doc('creditos/pagos'); if(pagV) await ref.update({items:{[id]:obj}}); else { await ref.set({items:{...(pag.items||{}),[id]:obj}}); pagV=true } }
 // estatus sheet
-function setBase(b){cBase=b;document.querySelectorAll('#cBase .chip').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b===b)));$('#cUsd').readOnly=b==='bs';$('#cBs').readOnly=b==='usd';recalcC()}
+function setBase(b){cBase=b;document.querySelectorAll('#cBase .chip').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b===b)));$('#cUsd').readOnly=false;$('#cBs').readOnly=false;recalcC()}
 function cRetUpd(){const pc=$('#cRetP').value,b=n2($('#cBs').value);$('#cRetHint').innerHTML=pc===''||+pc===0||!b?'':`Retención IVA Bs ${fmt2.format(retOf(b,+pc))} · ISLR 2% Bs ${fmt2.format(islrOf(b,+pc))} · a pagar al hotel Bs <b>${fmt2.format(netOf(b,+pc))}</b>`}
 function recalcC(){setTimeout(cRetUpd);const t=n2($('#cTasaE').value);if(!t)return;if(cBase==='usd'){const u=n2($('#cUsd').value);$('#cBs').value=u!=null?(u*t).toFixed(2):''}else{const b=n2($('#cBs').value);$('#cUsd').value=b!=null?(b/t).toFixed(2):''}}
-['#cUsd','#cBs','#cTasaE'].forEach(x=>$(x).addEventListener('input',recalcC)); $('#cRetP').addEventListener('change',cRetUpd);
+$('#cUsd').addEventListener('input',()=>{ if(cBase!=='usd'){cBase='usd';document.querySelectorAll('#cBase .chip').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b==='usd')))} recalcC() });
+$('#cBs').addEventListener('input',()=>{ if(cBase!=='bs'){cBase='bs';document.querySelectorAll('#cBase .chip').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b==='bs')))} recalcC() });
+$('#cTasaE').addEventListener('input',recalcC); $('#cRetP').addEventListener('change',cRetUpd);
 $('#cBase').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)setBase(b.dataset.b)});
 let cMon='USD';
 function setCMon(m,pull){cMon=m;document.querySelectorAll('#cMon .chip').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.m===m)));const e=m==='EUR';$('#cLblUsd').textContent=e?'Monto €':'Monto $';$('#cLblT').textContent=e?'Tasa BCV €':'Tasa BCV $';$('#cBaseDiv').textContent=e?'Euros (€)':'Dólares ($)';
