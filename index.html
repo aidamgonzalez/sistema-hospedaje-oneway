@@ -1421,7 +1421,13 @@ function reportData(){
     if(r.grupo){const mem=grpOf(r.grupo);
       if(seen.has(r.grupo)){usd=null;bs=null;nota='Incluido en el pago compartido'}
       else{seen.add(r.grupo);usd=mem.reduce((s,x)=>s+(vU(x)||0),0)||null;bs=mem.reduce((s,x)=>s+(vB(x)||0),0)||null;nota='Pago compartido de '+mem.length+' reservas'}}
-    const pc=hotelPct(r.hotel), rr=retOf(bs,pc); if(r.retAplica) nota=[nota,r.retDone?'Retención lista':'Retención pendiente'].filter(Boolean).join(' · '); return {...r,rusd:usd,rbs:bs,nota,pct:pc,rret:rr||null,rislr:islrOf(bs,pc)||null,rnet:bs?netOf(bs,pc):null}});
+    const pc=hotelPct(r.hotel), rr=retOf(bs,pc); if(r.retAplica) nota=[nota,r.retDone?'Retención lista':'Retención pendiente'].filter(Boolean).join(' · ');
+    if(rType==='llegadas'){ const L=[];
+      if(r.ext&&r.ext.same) L.push(`EXTENSIÓN de la reserva del ${fd(r.ext.r.in)} al ${fd(r.ext.r.out)}`);
+      const ch=Array.isArray(r.cambios)&&r.cambios.length?r.cambios[r.cambios.length-1]:null;
+      if(ch) L.push(`CAMBIO DE HOTEL: viene de ${ch.de}${ch.motivo?' ('+ch.motivo+')':''}`);
+      else if(r.ext&&!r.ext.same) L.push(`CAMBIO DE HOTEL: viene de ${r.ext.r.hotel} (${fd(r.ext.r.in)} al ${fd(r.ext.r.out)})`);
+      if(L.length) nota=[L.join(' · '),nota].filter(Boolean).join(' · ') } return {...r,rusd:usd,rbs:bs,nota,pct:pc,rret:rr||null,rislr:islrOf(bs,pc)||null,rnet:bs?netOf(bs,pc):null}});
   const by={}; for(const r of items)(by[r.hotel]=by[r.hotel]||[]).push(r);
   const groups=Object.entries(by).sort((a,b)=>a[0].localeCompare(b[0],'es')).map(([h,list])=>{
     list.sort((a,b)=>(a.grupo||'~'+a.pasajero)<(b.grupo||'~'+b.pasajero)?-1:1);
