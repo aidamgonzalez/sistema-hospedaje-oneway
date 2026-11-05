@@ -259,6 +259,7 @@ tr.xrowsub td{background:var(--surface-2);padding-top:4px;padding-bottom:4px;bor
 .nota small{display:block;color:var(--muted,#6b7a89);font-size:11px;margin-top:3px}.nota .ndel{position:absolute;top:4px;right:4px;border:0;background:none;color:var(--bad);padding:2px 6px;cursor:pointer}
 .notechip{display:inline-block;margin-left:6px;font-size:11px;cursor:help}
 .selsumbox{border-color:var(--navy,#10283f)!important;box-shadow:0 0 0 2px rgba(16,40,63,.08)}
+td.gcell{cursor:pointer}td.gcell:hover{background:#efe2c8!important}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -658,7 +659,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <footer><button class="primary" id="iDown" type="button">Descargar imagen</button><button id="iShare" type="button" hidden>Compartir (WhatsApp…)</button><button id="iCopy" type="button" hidden>Copiar imagen</button></footer>
 </aside>
 <aside class="sheet" id="gsheet" hidden aria-labelledby="gTitle">
-  <header><h2 id="gTitle">Monto total del pago</h2><button class="ghost" id="gtClose" type="button" aria-label="Cerrar">✕</button></header>
+  <header><h2 id="gTitle">Pago compartido</h2><button class="ghost" id="gtClose" type="button" aria-label="Cerrar">✕</button></header>
   <form id="gtForm" onsubmit="return false" style="display:flex;flex-direction:column;gap:12px">
     <p class="hint">Coloca el monto <b>total</b> que cubre todas estas reservas. Se guarda una sola vez en la primera reserva y las demás quedan como “pago compartido”.</p>
     <ul id="gtList" class="gtlist"></ul>
@@ -668,10 +669,10 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="f"><label for="gtBcv">Tasa BCV</label><input id="gtBcv" type="number" step="0.01" min="0"></div>
       <div class="f"><label for="gtUsd" id="gtLblUsd">Monto total $</label><input id="gtUsd" type="number" step="0.01" min="0"><span class="hint">El último que escribas manda: $ × tasa = Bs · Bs ÷ tasa = $</span></div>
       <div class="f"><label for="gtFac">Factura</label><input id="gtFac" placeholder="Opcional"><span class="hint">Solo se coloca en las reservas que no tienen factura</span></div>
-      <div class="f full"><label for="gtSt">Status de pago para todas</label><input id="gtSt" list="dlStatus" placeholder="Dejar igual"></div>
+      <div class="f full"><label for="gtSt">Status de pago para todas</label><div class="quick" id="gtQuick" style="margin-bottom:6px"><button type="button" class="chip ok" data-s="PAGADO">PAGADO</button><button type="button" class="chip warn" data-s="POR PAGAR">POR PAGAR</button><button type="button" class="chip warn" data-s="PENDIENTE">PENDIENTE</button></div><input id="gtSt" list="dlStatus" placeholder="Dejar igual"></div>
     </div>
     <p class="hint" id="gtMsg"></p>
-    <div class="row" style="display:flex;gap:8px"><button class="primary" id="gtSave" type="button">Guardar monto total</button><button id="gtSkip" type="button">Ahora no</button></div>
+    <div class="row" style="display:flex;gap:8px"><button class="primary" id="gtSave" type="button">Guardar pago</button><button id="gtSkip" type="button">Ahora no</button></div>
   </form>
 </aside>
 <aside class="sheet" id="ksheet" hidden aria-labelledby="kTitle">
@@ -853,7 +854,7 @@ function render(){
         if(span>1){
           const su=run.reduce((s,y)=>s+(y.tusd||0),0), sb=run.reduce((s,y)=>s+(y.tbs||0),0), bcv=run.map(y=>y.bcv).find(v=>num(v)!=null), fac=[...new Set(run.flatMap(y=>[y.factura,...(y.facturas||[]).map(e=>e.numero)]).filter(Boolean))].join(', ');
           const cur=x.moneda==='EUR'?'€ ':'';
-          const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span></td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(netOf(sb,hotelPct(x.hotel)))}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
+          const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span>${canWrite?'<span class="sub gedit">✎ Editar pago</span>':''}</td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(netOf(sb,hotelPct(x.hotel)))}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
         } else {
           const empty=num(x.usd)==null&&num(x.bs)==null&&x.grupo;
           const XX=x.facturas||[], cu=x.moneda==='EUR'?'€ ':'', uM=num(x.usd)!=null?x.usd:x.uDer, uX=x.tusd!=null&&uM!=null?Math.round((x.tusd-uM)*100)/100:x.tusd; money=`<td class="num">${(num(x.usd)!=null?cu+fmt2.format(x.usd):(x.uDer!=null?`<span class="mut" title="Calculado: Bs ÷ tasa">${cu+fmt2.format(x.uDer)}</span>`:(empty?'<span class="mut">pago compartido</span>':'')))}${XX.length&&x.tusd!=null?`<span class="xsub">Total con ${XX.length} adic.: <b>${cu+fmt2.format(x.tusd)}</b></span>`:''}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs!=null?`<span class="xsub">Total: <b>${fmt2.format(x.tbs)}</b></span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(netOf(x.tbs,hotelPct(x.hotel)))}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
@@ -949,7 +950,7 @@ async function groupSelected(){
   const gid=rs.find(r=>r.grupo)?.grupo||('g'+Date.now().toString(36));
   try{ await setGroup(rs,gid); sel.clear(); const all=rows.filter(r=>r.grupo===gid); for(const r of rs) if(!all.includes(r)) all.push(r); openGTotal(all.map(r=>({...r,grupo:gid})).filter((r,i,a)=>a.findIndex(x=>x.slug===r.slug&&x.id===r.id)===i)) }catch(e){ toast('No se pudo unir el pago. Inténtalo de nuevo.') }
 }
-let gtMem=[], gtFromSheet=false; const gtN=v=>{if(v==null||String(v).trim()==='')return null;const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null};
+let gtMem=[], gtFromSheet=false, gtIni=''; const gtN=v=>{if(v==null||String(v).trim()==='')return null;const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null};
 function openGTotal(mem,fromSheet){
   gtMem=[...mem].sort((a,b)=>(a.in||'')<(b.in||'')?-1:(a.in||'')>(b.in||'')?1:0); gtFromSheet=!!fromSheet; if(gtMem.length<2) return;
   const m0=gtMem[0], eur=gtMem.some(r=>r.moneda==='EUR');
@@ -960,6 +961,7 @@ function openGTotal(mem,fromSheet){
   const fp=gtMem.map(r=>r.fecha_pago).find(Boolean); $('#gtFecha').value=fp||todayStr(); $('#gtFH').textContent='';
   gtBase=null; $('#gtBs').value=sb?Math.round(sb*100)/100:''; $('#gtBcv').value=bcv??''; $('#gtUsd').value=su?Math.round(su*100)/100:'';
   if(!bcv) gtTasa(false); else gtTasaHint();
+  gtIni=[$('#gtBs').value,$('#gtUsd').value,$('#gtBcv').value].join('|');
   $('#gtFac').value=[...new Set(gtMem.map(r=>r.factura).filter(Boolean))].join(', '); $('#gtFac').dataset.ini=$('#gtFac').value; $('#gtSt').value='';
   $('#gtMsg').textContent=gtMem.filter(r=>num(r.bs)!=null||num(r.usd)!=null).length>1?'Estas reservas ya tenían montos por separado; abajo ves la suma. Si colocas el total, reemplaza esos montos.':'';
   $('#scrim').hidden=false; $('#gsheet').hidden=false; setTimeout(()=>$('#gtBs').focus(),50);
@@ -973,14 +975,16 @@ function gtTasaHint(){ const d=$('#gtFecha').value, eur=gtMem.some(r=>r.moneda==
 function gtTasa(){ const d=$('#gtFecha').value, eur=gtMem.some(r=>r.moneda==='EUR'), t=d?tasaFor(d,eur?'EUR':'USD'):null; if(t){ $('#gtBcv').value=t.v; gtCalc() } else $('#gtBcv').value=''; gtTasaHint() }
 $('#gtFecha').addEventListener('change',gtTasa);
 $('#gtBs').addEventListener('input',()=>{gtBase='bs';gtCalc()}); $('#gtUsd').addEventListener('input',()=>{gtBase='usd';gtCalc()}); $('#gtBcv').addEventListener('input',()=>{gtCalc();gtTasaHint()});
+$('#gtQuick').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)$('#gtSt').value=b.dataset.s});
 $('#gtClose').onclick=closeGT; $('#gtSkip').onclick=closeGT;
 $('#gtSave').onclick=async()=>{
   const fpago=$('#gtFecha').value||null, bs=gtN($('#gtBs').value), bcv=gtN($('#gtBcv').value), usd=gtN($('#gtUsd').value), fac=$('#gtFac').value.trim(), st=$('#gtSt').value.trim().toUpperCase().replace(/\s+/g,' ');
-  if(bs==null&&usd==null){ toast('Coloca el monto total en Bs o en $.'); $('#gtBs').focus(); return }
+  if(bs==null&&usd==null&&[$('#gtBs').value,$('#gtUsd').value,$('#gtBcv').value].join('|')!==gtIni){ toast('Coloca el monto total en Bs o en $.'); $('#gtBs').focus(); return }
   const now=new Date().toISOString(), by={};
-  gtMem.forEach((r,i)=>{ const u=i===0?{usd:usd??(bs!=null&&bcv?Math.round(bs/bcv*100)/100:null),bs:bs??(usd!=null&&bcv?Math.round(usd*bcv*100)/100:null),bcv:bcv??null}:{usd:null,bs:null};
+  const montosIgual=[$('#gtBs').value,$('#gtUsd').value,$('#gtBcv').value].join('|')===gtIni;
+  gtMem.forEach((r,i)=>{ const u=montosIgual?{}:i===0?{usd:usd??(bs!=null&&bcv?Math.round(bs/bcv*100)/100:null),bs:bs??(usd!=null&&bcv?Math.round(usd*bcv*100)/100:null),bcv:bcv??null}:{usd:null,bs:null};
     if(fac&&fac!==$('#gtFac').dataset.ini&&!r.factura) u.factura=fac; if(st) u.status=st; u.fecha_pago=fpago; u.editado=now; (by[r.slug]=by[r.slug]||{})[r.id]=u });
-  try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`Monto total guardado para ${gtMem.length} reservas.`); closeGT(); if(gtFromSheet) closeSheet() }
+  try{ for(const [sl,rs] of Object.entries(by)) await col().doc(sl).update({rows:rs}); toast(`Pago compartido actualizado (${gtMem.length} reservas).`); closeGT(); if(gtFromSheet) closeSheet() }
   catch(e){ toast('No se pudo guardar el monto. Inténtalo de nuevo.') }
 };
 let imgBlob=null, imgName='';
@@ -1363,7 +1367,7 @@ $('#clearBtn').onclick=()=>{$('#q').value='';$('#fFac').value='';$('#fTipo').val
 $('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k);(r.xs||[]).forEach((x,i)=>{on?selX.add(k+'|'+i):selX.delete(k+'|'+i)})}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
 $('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
 try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
-$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;if(tr.dataset.x){const k=tr.dataset.x;cb.checked?selX.add(k):selX.delete(k)}else{const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k)}updSel();return}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
+$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;if(tr.dataset.x){const k=tr.dataset.x;cb.checked?selX.add(k):selX.delete(k)}else{const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k)}updSel();return}if(e.target.closest('td.gcell')&&canWrite){const r0=rowByKey.get(tr.dataset.id);if(r0&&r0.grupo){openGTotal(grpOf(r0.grupo));return}}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
 $('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
 function setView(v){view=v;page=0;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));$('#view-reservas').hidden=v!=='reservas';$('#view-hoteles').hidden=v!=='hoteles';$('#view-reportes').hidden=v!=='reportes';$('#view-creditos').hidden=v!=='creditos';$('#view-conc').hidden=v!=='conc';$('#filters').hidden=v==='reportes'||v==='creditos'||v==='conc';$('#summary').hidden=v==='reportes'||v==='creditos'||v==='conc';render();updSel()}
