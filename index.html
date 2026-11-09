@@ -515,7 +515,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>Reserva en hospedaje</th><th>Lo que está facturado</th><th>Qué revisar</th></tr></thead><tbody></tbody></table></div>
   </section>
   <section id="view-hoteles" hidden>
-    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span></div>
+    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span><span class="spacer" style="flex:1"></span><button type="button" id="hPdf">📄 PDF de hoteles por ciudad</button></div>
     <div class="tablebox" id="hFacBox" hidden style="margin-bottom:16px"><table id="hFacTbl"><thead><tr><th>Factura</th><th>Hotel</th><th>Contrato</th><th>Pasajero</th><th>Check-in</th><th>Check-out</th><th class="num">Noches</th><th>Status</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th></tr></thead><tbody></tbody></table></div>
     <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
   </section>
@@ -1778,6 +1778,29 @@ async function credXlsx(){
   const ws2=XLSX.utils.aoa_to_sheet(b,{cellDates:true,dateNF:'dd/mm/yyyy'}); ws2['!cols']=[{wch:11},{wch:26},{wch:12},{wch:14},{wch:9},{wch:34},{wch:10},{wch:14},{wch:13}]; XLSX.utils.book_append_sheet(wb,ws2,'PAGOS');
   await saveFile(`DEUDA HOTELES ${cStamp()}.xlsx`,XLSX.write(wb,{bookType:'xlsx',type:'array',cellDates:true}));
 }
+async function hotelsPdf(){
+  const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
+  const AH=Object.values(allHotels()); if(!AH.length){toast('No hay hoteles registrados.');return}
+  const cnt={}; for(const r of rows){const k=upN(r.hotel);cnt[k]=(cnt[k]||0)+1}
+  const by={}; for(const h of AH){const c=(h.estado||'Sin ciudad').trim();(by[c]=by[c]||[]).push(h)}
+  const cities=Object.keys(by).sort((a,b)=>a==='Sin ciudad'?1:b==='Sin ciudad'?-1:a.localeCompare(b,'es'));
+  const doc=new J({orientation:'portrait',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), navy=[16,40,63], sand=[201,153,95];
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...sand);doc.text('ONE',40,44);doc.setTextColor(...navy);doc.text('WAY',40+doc.getTextWidth('ONE'),44);
+  doc.setFontSize(13);doc.setTextColor(22,40,58);doc.text('LISTADO DE HOTELES POR CIUDAD',W-40,40,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(93,111,128);doc.text(`${AH.length} hoteles · ${cities.length} ciudades · ${fd(todayStr())}`,W-40,56,{align:'right'});
+  let y=76;
+  for(const c of cities){ const L=by[c].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+    doc.autoTable({startY:y,theme:'grid',margin:{left:40,right:40},styles:{fontSize:9,cellPadding:4,lineColor:[219,226,234],lineWidth:.5,textColor:[22,40,58]},
+      headStyles:{fillColor:navy,textColor:255},
+      head:[[{content:c.toUpperCase()+'   ('+L.length+(L.length===1?' hotel)':' hoteles)'),colSpan:5,styles:{halign:'left',fillColor:sand,textColor:[22,40,58],fontStyle:'bold',fontSize:10}}],['Hotel','Categoría','Moneda','Retención','Reservas '+year]],
+      body:L.map(h=>[h.nombre,h.categoria||'',h.moneda==='EUR'?'Euros (€)':'Dólares ($)',pctLbl(h.retencion),String(cnt[upN(h.nombre)]||0)]),
+      columnStyles:{0:{cellWidth:200,fontStyle:'bold'},1:{cellWidth:100},2:{cellWidth:82},3:{cellWidth:80},4:{cellWidth:70,halign:'right'}},
+      didParseCell:hh=>{if(hh.section==='head'&&hh.row.index===1&&hh.column.index===4)hh.cell.styles.halign='right'}});
+    y=doc.lastAutoTable.finalY+14; }
+  const n=doc.internal.getNumberOfPages(); for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(140);doc.text(`One Way Travel Agency · Página ${i} de ${n}`,W/2,doc.internal.pageSize.getHeight()-20,{align:'center'})}
+  await saveFile(`HOTELES POR CIUDAD ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
+}
+$('#hPdf').onclick=hotelsPdf;
 async function credPdf(){
   const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
   const doc=new J({orientation:'portrait',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), navy=[16,80,122], sand=[201,153,95];
