@@ -260,6 +260,11 @@ tr.xrowsub td{background:var(--surface-2);padding-top:4px;padding-bottom:4px;bor
 .notechip{display:inline-block;margin-left:6px;font-size:11px;cursor:help}
 .selsumbox{border-color:var(--navy,#10283f)!important;box-shadow:0 0 0 2px rgba(16,40,63,.08)}
 td.gcell{cursor:pointer}td.gcell:hover{background:#efe2c8!important}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;border-radius:0;padding:8px 14px;font-weight:600;background:transparent;white-space:nowrap}.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--navy,#10283f);color:#fff}
+#tbl tbody tr.r-pend td:first-child{box-shadow:inset 4px 0 0 #e0a43a}#tbl tbody tr.r-pag td:first-child{box-shadow:inset 4px 0 0 #3a9a6a}
+.gmix{display:block;font-size:11px;margin-top:2px;color:#8a5a14;font-weight:600}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -422,7 +427,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="f"><label for="fTipo">Fechas por</label><select id="fTipo"><option value="in">Check-in</option><option value="out">Check-out</option><option value="stay">Estadía (en el hotel)</option></select></div>
   <div class="f"><label for="fDesde">Desde</label><input type="date" id="fDesde"></div>
   <div class="f"><label for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
-  <label class="check pendf"><input type="checkbox" id="fPend"> Solo por pagar</label>
+  <div class="f pagosel"><label>Pagos</label><div class="seg" id="fPago" role="group" aria-label="Filtrar por pago"><button type="button" data-p="" aria-pressed="true">Todas</button><button type="button" data-p="pend" aria-pressed="false">🟡 Por pagar</button><button type="button" data-p="pag" aria-pressed="false">🟢 Pagadas</button></div><input type="checkbox" id="fPend" hidden></div>
   <div class="f"><label for="fRet">Retención</label><select id="fRet"><option value="">Todas</option><option value="pend">Pendiente</option><option value="ok">Lista</option></select></div>
   <div class="f"><label for="fNS">No show</label><select id="fNS"><option value="">Todos</option><option value="si">Solo no show</option><option value="no">Sin no show</option></select></div>
   <label class="check"><input type="checkbox" id="fCruce"> Solo fechas cruzadas</label>
@@ -703,7 +708,7 @@ let rows=[];        // flattened {id, slug, hotel, ...}
 let year=2026, anios=[2026], unsub=null;
 try{const y=parseInt(localStorage.getItem('hosp-year'));if(y)year=y}catch(e){}
 let sel=new Set(), gsize={}, pendingGroup=null;
-let selX=new Set(); let curList=[], rowByKey=new Map(), grpMap=new Map(); const grpOf=g=>grpMap.get(g)||[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
+let selX=new Set(); let fPago=''; let curList=[], rowByKey=new Map(), grpMap=new Map(); const grpOf=g=>grpMap.get(g)||[]; let view='reservas', sort={k:'ord',d:-1}, page=0, editing=null, loaded=false;
 const fmt2=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt0=new Intl.NumberFormat('es-VE');
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -807,9 +812,9 @@ function filtered(){
     if(ft==='stay'){ if(!r.in||!r.out) return false; const last=r.out>r.in?r.out:r.in; return (!fb||r.in<=fb)&&(!fa||last>fa||(r.in===r.out&&r.in>=fa)) }
     const v=r[ft]; return !!v&&(!fa||v>=fa)&&(!fb||v<=fb) };
   const q=$('#q').value.trim().toUpperCase(), h=upN($('#fHotel').value), hx=h&&allHotels()[h]?true:false, c=$('#fContrato').value, s=$('#fStatus').value, m=$('#fMes').value, x=$('#fCruce').checked;
-  const pend=$('#fPend').checked, fr=$('#fRet').value, fns=$('#fNS').value, ff=$('#fFac').value.trim().toUpperCase().replace(/^0+(?=\d)/,'');
+  const fpg=fPago, pend=$('#fPend').checked||fpg==='pend', fr=$('#fRet').value, fns=$('#fNS').value, ff=$('#fFac').value.trim().toUpperCase().replace(/^0+(?=\d)/,'');
   const facHit=r=>[r.factura,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero):[])].filter(Boolean).some(v=>String(v).split(/[\s,;\/]+/).some(t=>t.toUpperCase().replace(/^0+(?=\d)/,'').includes(ff)));
-  return rows.filter(r=>inRange(r)&&(!ff||facHit(r))&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
+  return rows.filter(r=>inRange(r)&&(fpg!=='pag'||!r.isPend)&&(!ff||facHit(r))&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
     (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel,(r.notas||[]).map(n=>n.t).join(' '),(r.facturas||[]).map(e=>e.numero+' '+e.concepto).join(' ')].some(v=>v&&String(v).toUpperCase().includes(q))));
 }
 
@@ -819,7 +824,7 @@ function render(){
   if(view==='reportes'){renderReport();return}
   if(view==='creditos'){renderCred();return}
   if(view==='conc'){renderConc();return}
-  const list=filtered();
+  let list=filtered();
   const k=sort.k,d=sort.d;
   let gk=null;
   if(k==='in'||k==='out'||k==='hotel'||k==='contrato'||k==='ord'){ gk={}; for(const r of list) if(r.grupo){const v=r[k];const c=gk[r.grupo];if(v!=null&&(c==null||(d>0?v<c:v>c)))gk[r.grupo]=v} }
@@ -839,11 +844,14 @@ function render(){
   $('#summary').innerHTML=[[fmt0.format(list.length),'Reservas'],[fmt0.format(tN),'Noches'],['$ '+fmt2.format(tU),'Monto en $'],['Bs '+fmt2.format(tB),'Monto en Bs'],[fmt0.format(pend),'Por pagar'],[fmt0.format(list.filter(r=>r.retPend).length),'Retenciones pendientes'],[fmt0.format(cr),'Fechas cruzadas']]
     .map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
   if(view==='hoteles') return renderHotels(list);
+  if(!fPago&&view==='reservas'){ const gp=new Set(list.filter(r=>r.grupo&&r.isPend).map(r=>r.grupo)), pd=r=>r.isPend||(r.grupo&&gp.has(r.grupo)); const A=list.filter(pd), B=list.filter(r=>!pd(r)); list=A.concat(B); list._nPend=A.length }
   const pages=Math.max(1,Math.ceil(list.length/PAGE)); if(page>=pages) page=pages-1;
   const slice=list.slice(page*PAGE,page*PAGE+PAGE);
   curList=list; $('#tbl thead').innerHTML='<tr>'+(canWrite?`<th class="sel" title="Seleccionar todas las reservas filtradas"><input type="checkbox" id="selAll" aria-label="Seleccionar todas" ${list.length&&list.every(r=>sel.has(r.slug+'|'+r.id))?'checked':''}></th>`:'')+COLS.map(([key,l,n])=>`<th class="${n?'num':''}" data-k="${key}">${l}${sort.k===key?` <span class="arr">${sort.d>0?'▲':'▼'}</span>`:''}</th>`).join('')+'</tr>';
-  const html=[];
+  const html=[]; const nP=list._nPend, off=page*PAGE, colsN=COLS.length+(canWrite?1:0);
+  const sepRow=(t,c)=>`<tr class="sepRow"><td colspan="${colsN}" style="background:${c};font-weight:800;letter-spacing:.04em;font-size:12.5px;padding:8px 14px">${t}</td></tr>`;
   for(let i=0;i<slice.length;i++){
+    if(nP!=null){ const gi=off+i; if(gi===0&&nP>0) html.push(sepRow(`🟡 POR PAGAR · ${nP} reserva${nP>1?'s':''}`,'#fbedd0')); if(gi===nP&&list.length>nP) html.push(sepRow(`🟢 PAGADAS · ${list.length-nP} reserva${list.length-nP>1?'s':''}`,'#dff1e6')) }
     const r=slice[i]; let span=1;
     if(r.grupo) while(i+span<slice.length&&slice[i+span].grupo===r.grupo) span++;
     const run=slice.slice(i,i+span);
@@ -854,13 +862,13 @@ function render(){
         if(span>1){
           const su=run.reduce((s,y)=>s+(y.tusd||0),0), sb=run.reduce((s,y)=>s+(y.tbs||0),0), bcv=run.map(y=>y.bcv).find(v=>num(v)!=null), fac=[...new Set(run.flatMap(y=>[y.factura,...(y.facturas||[]).map(e=>e.numero)]).filter(Boolean))].join(', ');
           const cur=x.moneda==='EUR'?'€ ':'';
-          const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span>${canWrite?'<span class="sub gedit">✎ Editar pago</span>':''}</td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(netOf(sb,hotelPct(x.hotel)))}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
+          const gr=retOf(sb,hotelPct(x.hotel)); const fpg=run.map(y=>y.fecha_pago).find(Boolean); money=`<td class="num gcell" rowspan="${span}">${su?cur+fmt2.format(su):''}<span class="sub">Pago de ${n} reservas${fpg?' · pagado '+fd(fpg):''}</span>${(()=>{const np=run.filter(y=>y.isPend).length;return np&&np<run.length?`<span class="gmix">${run.length-np} pagada${run.length-np>1?'s':''} · ${np} por pagar</span>`:''})()}${canWrite?'<span class="sub gedit">✎ Editar pago</span>':''}</td><td class="num gcell" rowspan="${span}">${bcv!=null?fmt2.format(bcv):''}</td><td class="num gcell" rowspan="${span}">${sb?fmt2.format(sb):''}</td><td class="num gcell" rowspan="${span}">${gr?fmt2.format(gr)+`<span class="sub">A pagar ${fmt2.format(netOf(sb,hotelPct(x.hotel)))}</span>`+(run.some(y=>y.retAplica)?`<span class="rchip ${run.every(y=>!y.retAplica||y.retDone)?'ok':'no'}">${run.every(y=>!y.retAplica||y.retDone)?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''}</td><td class="gcell" rowspan="${span}">${esc(fac)}</td>`;
         } else {
           const empty=num(x.usd)==null&&num(x.bs)==null&&x.grupo;
           const XX=x.facturas||[], cu=x.moneda==='EUR'?'€ ':'', uM=num(x.usd)!=null?x.usd:x.uDer, uX=x.tusd!=null&&uM!=null?Math.round((x.tusd-uM)*100)/100:x.tusd; money=`<td class="num">${(num(x.usd)!=null?cu+fmt2.format(x.usd):(x.uDer!=null?`<span class="mut" title="Calculado: Bs ÷ tasa">${cu+fmt2.format(x.uDer)}</span>`:(empty?'<span class="mut">pago compartido</span>':'')))}${XX.length&&x.tusd!=null?`<span class="xsub">Total con ${XX.length} adic.: <b>${cu+fmt2.format(x.tusd)}</b></span>`:''}${x.abU!=null?`<span class="xsub">Abonado ${fmt2.format(x.abU)}${x.abN?' ('+x.abN+' n.)':''} · falta <b>${fmt2.format(x.remU||0)}</b></span>`:''}</td><td class="num">${num(x.bcv)!=null?fmt2.format(x.bcv):''}</td><td class="num">${num(x.bs)!=null?fmt2.format(x.bs):''}${XX.length&&x.tbs!=null?`<span class="xsub">Total: <b>${fmt2.format(x.tbs)}</b></span>`:''}</td><td class="num">${(()=>{const rr=retOf(x.tbs,hotelPct(x.hotel));return rr?fmt2.format(rr)+`<span class="sub">A pagar ${fmt2.format(netOf(x.tbs,hotelPct(x.hotel)))}</span>`+(x.retAplica?`<span class="rchip ${x.retDone?'ok':'no'}">${x.retDone?'✓ Ret. lista':'Ret. pendiente'}</span>`:''):''})()}</td><td>${esc(x.factura)}${XX.length?`<span class="xsub">${XX.map(e=>esc((e.concepto||'')+(e.numero?' #'+e.numero:''))).join(', ')}</span>`:''}</td>`;
         }
       }
-      html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
+      html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''} ${x.isPend?'r-pend':'r-pag'}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
     <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
     <td class="pax">${esc(x.pasajero)}${Array.isArray(x.notas)&&x.notas.length?`<span class="notechip" title="${esc(x.notas.map(n=>n.t).join('\n— '))}">📝${x.notas.length>1?x.notas.length:''}</span>`:''}${Array.isArray(x.cambios)&&x.cambios.length?`<span class="mvchip" title="${esc(x.cambios.map(c=>'De '+c.de+' → '+c.a+' ('+fd(c.fecha)+'): '+c.motivo).join(' | '))}">⇄ VIENE DE ${esc(x.cambios[x.cambios.length-1].de)}</span>`:''}${x.cambio_a?`<span class="mvchip" title="${esc(x.cambio_a.motivo)}">⇄ PASA A ${esc(x.cambio_a.a)} EL ${fd(x.cambio_a.fecha).slice(0,5)}</span>`:''}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
     <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
@@ -898,7 +906,7 @@ function renderHotels(list){
   renderFacSearch();
   const g={};
   for(const r of list){const k=upN(r.hotel);const h=g[k]=g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0,pi:0};h.n++;h.noches+=num(r.noches)||0;h.usd+=r.tusd||0;h.bs+=r.tbs||0;if(r.isPend){h.pend++;h.pu+=r.pusd||0;h.pb+=r.pbs||0;h.pr+=r.pret||0;h.pi+=r.pislr||0}}
-  const hf=upN($('#fHotel').value), others=$('#fFac').value.trim()||$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
+  const hf=upN($('#fHotel').value), others=$('#fFac').value.trim()||fPago||$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
   const AH=allHotels();
   const arr=Object.entries(AH).filter(([k])=>(!hf||k.includes(hf))&&(!others||g[k])).map(([k,m])=>[m,g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0}])
     .sort($('#fPend').checked?((a,b)=>b[1].pb-a[1].pb||b[1].pu-a[1].pu||b[1].pend-a[1].pend):((a,b)=>b[1].n-a[1].n||a[0].nombre.localeCompare(b[0].nombre,'es')));
@@ -1363,12 +1371,14 @@ async function exportXlsx(){
 /* ---------- events ---------- */
 ['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
 ['#q','#fFac','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'||s==='#fFac'?'input':'change',()=>{page=0;render()}));
-$('#clearBtn').onclick=()=>{$('#q').value='';$('#fFac').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
+function setPago(v){ fPago=v; $('#fPend').checked=v==='pend'; document.querySelectorAll('#fPago button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===v))); page=0; render() }
+document.querySelectorAll('#fPago button').forEach(b=>b.onclick=()=>setPago(b.dataset.p));
+$('#clearBtn').onclick=()=>{fPago='';document.querySelectorAll('#fPago button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p==='')));$('#q').value='';$('#fFac').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
 $('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k);(r.xs||[]).forEach((x,i)=>{on?selX.add(k+'|'+i):selX.delete(k+'|'+i)})}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
 $('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
 try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
-$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;if(tr.dataset.x){const k=tr.dataset.x;cb.checked?selX.add(k):selX.delete(k)}else{const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k)}updSel();return}if(e.target.closest('td.gcell')&&canWrite){const r0=rowByKey.get(tr.dataset.id);if(r0&&r0.grupo){openGTotal(grpOf(r0.grupo));return}}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
-$('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fPend').checked=true;$('#fHotel').value=pc.dataset.pend;setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
+$('#tbl tbody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr||!tr.dataset.id)return;if(e.target.closest('td.sel')){const cb=tr.querySelector('td.sel input');if(e.target!==cb)cb.checked=!cb.checked;if(tr.dataset.x){const k=tr.dataset.x;cb.checked?selX.add(k):selX.delete(k)}else{const k=tr.dataset.id;cb.checked?sel.add(k):sel.delete(k)}updSel();return}if(e.target.closest('td.gcell')&&canWrite){const r0=rowByKey.get(tr.dataset.id);if(r0&&r0.grupo){openGTotal(grpOf(r0.grupo));return}}const [s,id]=tr.dataset.id.split('|');const r=rows.find(x=>x.slug===s&&x.id===id);if(r)openSheet(r)});
+$('#tblH tbody').addEventListener('click',e=>{const pc=e.target.closest('[data-pend]');if(pc){$('#fHotel').value=pc.dataset.pend;setPago('pend');setView('reservas');return}const ed=e.target.closest('[data-edit]');if(ed){openHotel(ed.dataset.edit);return}const tr=e.target.closest('tr');if(!tr||!tr.dataset.hotel)return;$('#fHotel').value=tr.dataset.hotel;setView('reservas')});
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
 function setView(v){view=v;page=0;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));$('#view-reservas').hidden=v!=='reservas';$('#view-hoteles').hidden=v!=='hoteles';$('#view-reportes').hidden=v!=='reportes';$('#view-creditos').hidden=v!=='creditos';$('#view-conc').hidden=v!=='conc';$('#filters').hidden=v==='reportes'||v==='creditos'||v==='conc';$('#summary').hidden=v==='reportes'||v==='creditos'||v==='conc';render();updSel()}
 $('#newBtn').onclick=()=>openSheet(null);
