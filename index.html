@@ -265,6 +265,7 @@ td.gcell{cursor:pointer}td.gcell:hover{background:#efe2c8!important}
 .seg button[aria-pressed="true"]{background:var(--navy,#10283f);color:#fff}
 #tbl tbody tr.r-pend td:first-child{box-shadow:inset 4px 0 0 #e0a43a}#tbl tbody tr.r-pag td:first-child{box-shadow:inset 4px 0 0 #3a9a6a}
 .gmix{display:block;font-size:11px;margin-top:2px;color:#8a5a14;font-weight:600}
+.conschip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:#efe3f7;color:#6a3a8a;white-space:nowrap}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -407,6 +408,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <button id="exportBtn" type="button">Exportar Excel</button>
     <button id="newHotelBtn" type="button">+ Agregar hotel</button>
     <button id="newBtn" class="primary" type="button">+ Nueva reserva</button>
+    <button id="newConsBtn" type="button">+ Consumos</button>
   </div>
   <div class="wrap tabs" role="tablist">
     <button role="tab" id="tab-reservas" aria-selected="true" data-view="reservas">Reservas</button>
@@ -429,6 +431,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="f"><label for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
   <div class="f pagosel"><label>Pagos</label><div class="seg" id="fPago" role="group" aria-label="Filtrar por pago"><button type="button" data-p="" aria-pressed="true">Todas</button><button type="button" data-p="pend" aria-pressed="false">🟡 Por pagar</button><button type="button" data-p="pag" aria-pressed="false">🟢 Pagadas</button></div><input type="checkbox" id="fPend" hidden></div>
   <div class="f"><label for="fRet">Retención</label><select id="fRet"><option value="">Todas</option><option value="pend">Pendiente</option><option value="ok">Lista</option></select></div>
+  <div class="f"><label for="fTReg">Tipo</label><select id="fTReg"><option value="">Todos</option><option value="h">Hospedaje</option><option value="c">Consumos</option></select></div>
   <div class="f"><label for="fNS">No show</label><select id="fNS"><option value="">Todos</option><option value="si">Solo no show</option><option value="no">Sin no show</option></select></div>
   <label class="check"><input type="checkbox" id="fCruce"> Solo fechas cruzadas</label>
   <div class="f"><label for="fOrden">Orden</label><select id="fOrden"><option value="ord:-1">Últimas cargadas primero</option><option value="ord:1">Primeras cargadas primero</option><option value="in:-1">Check-in más lejano primero</option><option value="in:1">Check-in más cercano primero</option></select></div>
@@ -533,6 +536,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="warnbox" id="cruceBox" hidden></div>
     <div class="infobox" id="extBox" hidden></div>
     <div class="warnbox" id="yearBox" hidden></div>
+    <div class="f full"><span class="qlabel">Tipo de registro</span><div class="seg" id="eTipo"><button type="button" data-t="" aria-pressed="true">🛏 Hospedaje</button><button type="button" data-t="consumo" aria-pressed="false">🍽 Solo consumos</button></div><span class="hint" id="eTipoH"></span></div>
     <div class="f full"><label for="eHotel">Hotel</label><input id="eHotel" list="dlHotel" required placeholder="Escribe o elige un hotel"></div>
     <div class="f"><label for="eContrato">Contrato</label><input id="eContrato" list="dlContrato" placeholder="P1 LAURA, OW, METOR…"></div>
     <div class="f"><label for="eStatus">Status</label><input id="eStatus" list="dlStatus" value="POR PAGAR"></div>
@@ -544,9 +548,9 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" class="chip ok" data-s="PAGADO CON SF">PAGADO CON SF</button>
     </div></div>
     <div class="f full"><label for="ePax">Nombre del pasajero</label><input id="ePax" required placeholder="Varios pasajeros: separa con “ - ”"></div>
-    <div class="f"><label for="eIn">Check-in</label><input id="eIn" type="date" required></div>
-    <div class="f"><label for="eOut">Check-out</label><input id="eOut" type="date" required></div>
-    <div class="f"><label for="eNoches">Noches</label><input id="eNoches" type="number" min="0" step="1"></div>
+    <div class="f"><label for="eIn" id="lblIn">Check-in</label><input id="eIn" type="date" required></div>
+    <div class="f"><label for="eOut" id="lblOut">Check-out</label><input id="eOut" type="date" required></div>
+    <div class="f" id="nochesF"><label for="eNoches">Noches</label><input id="eNoches" type="number" min="0" step="1"></div>
     <div class="f"><label for="eObs">Observación</label><input id="eObs" list="dlObs" placeholder="SIN COMIDAS, DESAYUNO…"></div>
     <div class="notas full"><span class="qlabel">Notas</span><div id="nList"></div><div class="nadd"><textarea id="nTxt" rows="2" placeholder="Escribe una nota o comentario sobre esta reserva…"></textarea><button type="button" id="nAdd">Agregar nota</button></div></div>
     <div class="sec">Montos</div>
@@ -760,11 +764,11 @@ function rebuild(){ clearTimeout(_rbT);
   const out=[];
   for(const [sid,h] of Object.entries(hotels)){
     const rs=h.rows||{};
-    for(const [id,r] of Object.entries(rs)){ if(!r||r._borrado) continue; out.push({...r,id,slug:sid,hotel:h.nombre,moneda:h.moneda||'USD',ord:id[0]==='n'?2e12+parseInt(id.slice(1,-4),36):(parseInt(id.slice(1),36)||0)}); }
+    for(const [id,r] of Object.entries(rs)){ if(!r||r._borrado) continue; out.push({...r,...(r.tipo==='consumo'?{noches:0}:{}),id,slug:sid,hotel:h.nombre,moneda:h.moneda||'USD',ord:id[0]==='n'?2e12+parseInt(id.slice(1,-4),36):(parseInt(id.slice(1),36)||0)}); }
   }
   // overlap detection: same passenger string, overlapping stays
   const by={};
-  for(const r of out){r.cruce=null; r.cruces=null; r.ext=null; if(!r.in||!r.out||isNoShow(r)) continue; r._names=paxNames(r.pasajero); for(const n of r._names)(by[n]=by[n]||[]).push(r)}
+  for(const r of out){r.cruce=null; r.cruces=null; r.ext=null; if(!r.in||!r.out||isNoShow(r)||r.tipo==='consumo') continue; r._names=paxNames(r.pasajero); for(const n of r._names)(by[n]=by[n]||[]).push(r)}
   for(const [n,list] of Object.entries(by)){ if(list.length<2) continue;
     for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i],b=list[j]; if(a===b||!overl(a.in,a.out,b.in,b.out)) continue;
       (a.cruces=a.cruces||[]).push({r:b,n}); (b.cruces=b.cruces||[]).push({r:a,n}); a.cruce=a.cruce||b; b.cruce=b.cruce||a; }
@@ -814,7 +818,7 @@ function filtered(){
   const q=$('#q').value.trim().toUpperCase(), h=upN($('#fHotel').value), hx=h&&allHotels()[h]?true:false, c=$('#fContrato').value, s=$('#fStatus').value, m=$('#fMes').value, x=$('#fCruce').checked;
   const fpg=fPago, pend=$('#fPend').checked||fpg==='pend', fr=$('#fRet').value, fns=$('#fNS').value, ff=$('#fFac').value.trim().toUpperCase().replace(/^0+(?=\d)/,'');
   const facHit=r=>[r.factura,...(Array.isArray(r.facturas)?r.facturas.map(e=>e.numero):[])].filter(Boolean).some(v=>String(v).split(/[\s,;\/]+/).some(t=>t.toUpperCase().replace(/^0+(?=\d)/,'').includes(ff)));
-  return rows.filter(r=>inRange(r)&&(fpg!=='pag'||!r.isPend)&&(!ff||facHit(r))&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
+  const ftr=$('#fTReg').value; return rows.filter(r=>inRange(r)&&(!ftr||(ftr==='c')===(r.tipo==='consumo'))&&(fpg!=='pag'||!r.isPend)&&(!ff||facHit(r))&&(!fns||(fns==='si')===isNoShow(r))&&(!pend||r.isPend)&&(!fr||(fr==='pend'?r.retPend:r.retDone))&&(!h||(hx?upN(r.hotel)===h:upN(r.hotel).includes(h)))&&(!c||r.contrato===c)&&(!s||r.status===s)&&(!m||(r.in||'').startsWith(m))&&(!x||r.cruce)&&
     (!q||[r.pasajero,r.contrato,r.factura,r.obs,r.hotel,(r.notas||[]).map(n=>n.t).join(' '),(r.facturas||[]).map(e=>e.numero+' '+e.concepto).join(' ')].some(v=>v&&String(v).toUpperCase().includes(q))));
 }
 
@@ -870,8 +874,8 @@ function render(){
       }
       html.push(`<tr data-id="${esc(key)}" class="${x.grupo?'ingroup':''} ${x.isPend?'r-pend':'r-pag'}">${canWrite?`<td class="sel"><input type="checkbox" aria-label="Seleccionar" ${sel.has(key)?'checked':''}></td>`:''}
     <td class="hotel">${esc(x.hotel)}</td><td>${esc(x.contrato)}</td>
-    <td class="pax">${esc(x.pasajero)}${Array.isArray(x.notas)&&x.notas.length?`<span class="notechip" title="${esc(x.notas.map(n=>n.t).join('\n— '))}">📝${x.notas.length>1?x.notas.length:''}</span>`:''}${Array.isArray(x.cambios)&&x.cambios.length?`<span class="mvchip" title="${esc(x.cambios.map(c=>'De '+c.de+' → '+c.a+' ('+fd(c.fecha)+'): '+c.motivo).join(' | '))}">⇄ VIENE DE ${esc(x.cambios[x.cambios.length-1].de)}</span>`:''}${x.cambio_a?`<span class="mvchip" title="${esc(x.cambio_a.motivo)}">⇄ PASA A ${esc(x.cambio_a.a)} EL ${fd(x.cambio_a.fecha).slice(0,5)}</span>`:''}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
-    <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.noches??''}</td>
+    <td class="pax">${esc(x.pasajero)}${x.tipo==='consumo'?'<span class="conschip">CONSUMOS</span>':''}${Array.isArray(x.notas)&&x.notas.length?`<span class="notechip" title="${esc(x.notas.map(n=>n.t).join('\n— '))}">📝${x.notas.length>1?x.notas.length:''}</span>`:''}${Array.isArray(x.cambios)&&x.cambios.length?`<span class="mvchip" title="${esc(x.cambios.map(c=>'De '+c.de+' → '+c.a+' ('+fd(c.fecha)+'): '+c.motivo).join(' | '))}">⇄ VIENE DE ${esc(x.cambios[x.cambios.length-1].de)}</span>`:''}${x.cambio_a?`<span class="mvchip" title="${esc(x.cambio_a.motivo)}">⇄ PASA A ${esc(x.cambio_a.a)} EL ${fd(x.cambio_a.fecha).slice(0,5)}</span>`:''}${x.grupo&&span<2?`<span class="gtag">PAGO ×${n}</span>`:''}${x.ext?`<span class="extchip" title="${esc(x.ext.same?'Extensión de la reserva del '+fd(x.ext.r.in)+' al '+fd(x.ext.r.out):'Viene de '+x.ext.r.hotel+' ('+fd(x.ext.r.in)+'–'+fd(x.ext.r.out)+')')}">${x.ext.same?'EXTENSIÓN':'CAMBIO DE HOTEL'}</span>`:''}${x.cruce?`<span class="flag" title="${esc((x.cruces||[]).map(c=>c.n+': '+c.r.hotel+' '+fd(c.r.in)+'–'+fd(c.r.out)).join(' | '))}">⚠</span>`:''}</td>
+    <td>${fd(x.in)}</td><td>${fd(x.out)}</td><td class="num">${x.tipo==='consumo'?'—':(x.noches??'')}</td>
     <td>${stLimpio(x.status)?`<span class="chip ${chipClass(x.status)}">${esc(stLimpio(x.status))}</span>`:''}${isNoShow(x)?' <span class="chip bad">NO SHOW</span>':''}</td><td>${esc(x.obs)}</td>${money}</tr>`);
     }
     for(const x of run) (x.xs||[]).forEach((e,k)=>{ const xk=x.slug+'|'+x.id+'|'+k, cu=x.moneda==='EUR'?'€ ':'$ ';
@@ -906,7 +910,7 @@ function renderHotels(list){
   renderFacSearch();
   const g={};
   for(const r of list){const k=upN(r.hotel);const h=g[k]=g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0,pi:0};h.n++;h.noches+=num(r.noches)||0;h.usd+=r.tusd||0;h.bs+=r.tbs||0;if(r.isPend){h.pend++;h.pu+=r.pusd||0;h.pb+=r.pbs||0;h.pr+=r.pret||0;h.pi+=r.pislr||0}}
-  const hf=upN($('#fHotel').value), others=$('#fFac').value.trim()||fPago||$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
+  const hf=upN($('#fHotel').value), others=$('#fFac').value.trim()||fPago||$('#fTReg').value||$('#fPend').checked||$('#fRet').value||$('#fNS').value||$('#q').value.trim()||$('#fDesde').value||$('#fHasta').value||$('#fContrato').value||$('#fStatus').value||$('#fMes').value||$('#fCruce').checked;
   const AH=allHotels();
   const arr=Object.entries(AH).filter(([k])=>(!hf||k.includes(hf))&&(!others||g[k])).map(([k,m])=>[m,g[k]||{n:0,noches:0,usd:0,bs:0,pend:0,pu:0,pb:0,pr:0}])
     .sort($('#fPend').checked?((a,b)=>b[1].pb-a[1].pb||b[1].pu-a[1].pu||b[1].pend-a[1].pend):((a,b)=>b[1].n-a[1].n||a[0].nombre.localeCompare(b[0].nombre,'es')));
@@ -1046,14 +1050,14 @@ async function buildPayImg(){
     for(const [l,w,a,k] of cols) put(l.toUpperCase(),k,y+19,a); y+=38;
     let tn=0,tu=0,te=0,tb=0;
     rws.forEach(({r,lines,fl,h:rh},i)=>{ g.fillStyle=i%2?'#faf6ef':'#fff'; g.fillRect(X0,y,TW,rh); g.fillStyle=LINE; g.fillRect(X0,y+rh-1,TW,1); const cy=y+rh/2;
-      g.fillStyle=INK; g.font=F(400,16); put(String(i+1),'n',cy,'c'); put(fd(r.in),'in',cy,'c'); put(fd(r.out),'out',cy,'c'); put(r.noches!=null?String(r.noches):'','noc',cy,'c');
+      g.fillStyle=INK; g.font=F(400,16); put(String(i+1),'n',cy,'c'); put(fd(r.in),'in',cy,'c'); put(fd(r.out),'out',cy,'c'); put(r.tipo==='consumo'?'Consumo':(r.noches!=null?String(r.noches):''),'noc',cy,'c');
       g.font=F(600,17); lines.forEach((ln,j)=>g.fillText(ln,xOf('pax')+10,cy-(lines.length-1)*11+j*22));
       if(hasF){ g.font=F(500,15); g.fillStyle=INK; fl.forEach((ln,j)=>put(ln,'fac',cy-(fl.length-1)*9+j*18,'c')); g.fillStyle=INK }
       if(showU){ g.font=F(700,16); put(amt(r),'mon',cy,'r') } if(showBs){ g.font=F(showU?400:700,16); put(bOf(r)!=null?(showU?'':'Bs ')+fmt2.format(bOf(r)):'—','bs',cy,'r') }
       tn+=num(r.noches)||0; if(r.moneda==='EUR')te+=uOf(r)||0; else tu+=uOf(r)||0; tb+=bOf(r)||0; y+=rh });
     g.fillStyle='#f1e7d6'; g.fillRect(X0,y,TW,46); g.fillStyle=SAND; g.fillRect(X0,y,TW,2);
-    g.font=F(800,17); g.fillStyle=NAVY; g.fillText(`TOTAL · ${rws.length} reserva${rws.length>1?'s':''}`,X0+10,y+23);
-    put(fmt0.format(tn),'noc',y+23,'c'); if(showU) put((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),'mon',y+23,'r'); if(showBs) put((showU?'':'Bs ')+fmt2.format(tb),'bs',y+23,'r');
+    g.font=F(800,17); g.fillStyle=NAVY; const allC=rws.every(o=>o.r.tipo==='consumo'); g.fillText(`TOTAL · ${rws.length} ${allC?'consumo':'reserva'}${rws.length>1?'s':''}`,X0+10,y+23);
+    if(!allC) put(fmt0.format(tn),'noc',y+23,'c'); if(showU) put((tu||!te?'$ '+fmt2.format(tu):'')+(te?(tu?' / ':'')+'€ '+fmt2.format(te):''),'mon',y+23,'r'); if(showBs) put((showU?'':'Bs ')+fmt2.format(tb),'bs',y+23,'r');
     y+=46+26 }
   g.font=F(400,12); g.fillStyle=MUT; g.fillText('Generado por el Sistema de Hospedaje · One Way Travel Agency',X0,H-24); if(repartido){g.textAlign='right';g.fillText('Pago compartido: monto repartido por tarifa y noches de cada reserva',W-36,H-24);g.textAlign='left'}
   imgBlob=await new Promise(res=>cv.toBlob(res,'image/jpeg',0.92));
@@ -1172,7 +1176,7 @@ function openSheet(r,pre){
   F.eObs.value=r?.obs||pre?.obs||''; F.eUsd.value=r?.usd??pre?.usd??''; F.eBcv.value=r?.bcv??pre?.bcv??''; F.eBs.value=r?.bs??pre?.bs??''; F.eTarifa.value=r?.tarifa??pre?.tarifa??''; F.eFactura.value=r?.factura||''; F.ePresu.value=r?.presupuesto||''; $('#eMesFact').value=r?.mesfact||pre?.mesfact||'';
   dupUnit=null; if(pre&&pre.dup){ const nn=num(pre.noches); dupUnit=nn?{u:pre.tarifa??(pre.usd!=null?pre.usd/nn:null),b:pre.bs!=null&&pre.usd==null?pre.bs/nn:null}:null; $('#sheetTitle').textContent='Nueva reserva (copia)'; if(pre.pasajero) F.ePax.value=pre.pasajero }
   $('#lblUsd').textContent=(r&&r.moneda==='EUR')?'Monto €':'Monto $';
-  $('#delBtn').hidden=!r; $('#mvBtn').hidden=!r||!canWrite; $('#dupBtn').hidden=!r||!canWrite; $('#saveDupBtn').hidden=!!r||!canWrite||!!pendingGroup; renderMvHist(r); $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
+  setTipo(r?.tipo||pre?.tipo||''); $('#delBtn').hidden=!r; $('#mvBtn').hidden=!r||!canWrite; $('#dupBtn').hidden=!r||!canWrite; $('#saveDupBtn').hidden=!!r||!canWrite||!!pendingGroup; renderMvHist(r); $('#delConfirm').hidden=true; moneyBase=null; checkCruce(); renderExt(); syncQuick(); renderGbox(); autoBcv=null; autoFillBcv();
   notas=Array.isArray(r?.notas)?[...r.notas]:[]; $('#nTxt').value=''; renderNotas(); $('#xList').innerHTML=''; (r?.facturas||[]).forEach(e=>xRow(e)); xTot(); $('#aList').innerHTML=''; (r?.abonos||[]).forEach(e=>aRow(e)); aTot();
   $('#eRetOk').checked=!!r?.ret_ok; $('#eRetComp').value=r?.ret_comp||'';
   $('#eNoShow').checked=!!(r&&isNoShow(r)); if(r&&/^\s*NO SHOW\s*$/i.test(r.status||'')){F.eStatus.value='';syncQuick()}
@@ -1188,8 +1192,8 @@ let cruceOk=false, cruceSig='';
 function findCruces(){
   const ns=paxNames(F.ePax.value), a=F.eIn.value, b=F.eOut.value; if(!ns.length||!a||!b) return [];
   if($('#eNoShow').checked) return [];
-  const res=[]; const seen=new Set();
-  for(const r of rows){ if(editing&&r.id===editing.id&&r.slug===editing.slug) continue; if(isNoShow(r)||!r.in||!r.out) continue;
+  const res=[]; const seen=new Set(); if(eTipo==='consumo') return [];
+  for(const r of rows){ if(editing&&r.id===editing.id&&r.slug===editing.slug) continue; if(isNoShow(r)||!r.in||!r.out||r.tipo==='consumo') continue;
     const rn=r._names||paxNames(r.pasajero); for(const n of ns){ if(rn.includes(n)&&overl(a,b,r.in,r.out)){ const k=r.slug+'|'+r.id+'|'+n; if(!seen.has(k)){seen.add(k);res.push({n,r})} } } }
   return res.sort((x,y)=>(x.r.in||'')<(y.r.in||'')?-1:1);
 }
@@ -1204,7 +1208,7 @@ function findExt(){
   return res.sort((x,y)=>(y.same?1:0)-(x.same?1:0));
 }
 function renderExt(){
-  const L=findExt(), box=$('#extBox'); box.hidden=!L.length; if(!L.length) return;
+  const L=eTipo==='consumo'?[]:findExt(), box=$('#extBox'); box.hidden=!L.length; if(!L.length) return;
   const same=L.filter(c=>c.same), hasObs=/EXTENSI/i.test(F.eObs.value);
   box.innerHTML=`<b>ℹ ${same.length?'Es una extensión':'Continúa estadía en otro hotel'}</b><ul>${L.slice(0,6).map(c=>`<li><b>${esc(c.n)}</b> ${c.tipo==='antes'?'ya está':'tiene reserva'} en <b>${esc(c.r.hotel)}</b> del ${fd(c.r.in)} al ${fd(c.r.out)}${c.r.contrato?' · '+esc(c.r.contrato):''} → ${c.same?(c.tipo==='antes'?'esta reserva <b>extiende</b> su estadía':'esa reserva es la <b>extensión</b> de esta'):(c.tipo==='antes'?'<b>cambio de hotel</b>: sale de allá y entra aquí':'<b>cambio de hotel</b>: sale de aquí y entra allá')}</li>`).join('')}</ul>${same.length&&!hasObs?'<button type="button" id="extObs">Agregar “EXTENSIÓN” a la observación</button>':''}`;
   $('#extObs')&&($('#extObs').onclick=()=>{F.eObs.value=(F.eObs.value.trim()?F.eObs.value.trim()+' - ':'')+'EXTENSIÓN';renderExt()});
@@ -1279,8 +1283,9 @@ $('#xAdd').onclick=()=>{xRow();xTot();const l=[...document.querySelectorAll('#xL
 ['input','change'].forEach(ev=>{F.eUsd.addEventListener(ev,xTot);F.eBs.addEventListener(ev,xTot)});
 function collect(){
   const up=v=>v.trim().toUpperCase().replace(/\s+/g,' ');
-  const r={contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
+  const r={tipo:eTipo||null,contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
   for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
+  if(eTipo==='consumo') r.noches=0;
   for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
   const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null; r.mesfact=$('#eMesFact').value||null; { const pend=$('#nTxt').value.trim(); if(pend){ notas=[...notas,{t:pend,por:(document.getElementById('uName')?.textContent||'').split(' · ')[0]||null,el:new Date().toISOString()}]; $('#nTxt').value='' } r.notas=notas.length?notas:null; }
   { const A=aRead(); r.abonos=A.length?A:null; const tot=parseFloat(F.eUsd.value), pu=A.reduce((s,e)=>s+(e.usd||0),0), su=(r.status||'').toUpperCase();
@@ -1297,14 +1302,21 @@ $('#nList').addEventListener('click',async e=>{ const b=e.target.closest('.ndel'
 let _dupNext=null, dupUnit=null;
 function dupRecalc(){ if(!dupUnit) return; const nn=parseFloat(F.eNoches.value); if(!(nn>0)) return; if(dupUnit.u!=null){ F.eUsd.value=(dupUnit.u*nn).toFixed(2); moneyBase='usd'; calcBs() } else if(dupUnit.b!=null){ F.eBs.value=(dupUnit.b*nn).toFixed(2); moneyBase='bs'; usdDesdeBs() } }
 function dupData(fromForm){ const v=x=>x.value.trim(), n=x=>{const f=parseFloat(x.value);return isFinite(f)?f:null};
-  return {dup:true,hotel:v(F.eHotel),contrato:v(F.eContrato),status:'POR PAGAR',in:F.eIn.value,out:F.eOut.value,noches:n(F.eNoches),obs:v(F.eObs),bcv:n(F.eBcv),tarifa:n(F.eTarifa),usd:n(F.eUsd),bs:n(F.eBs),mesfact:$('#eMesFact').value||null} }
+  return {dup:true,tipo:eTipo||'',hotel:v(F.eHotel),contrato:v(F.eContrato),status:'POR PAGAR',in:F.eIn.value,out:F.eOut.value,noches:n(F.eNoches),obs:v(F.eObs),bcv:n(F.eBcv),tarifa:n(F.eTarifa),usd:n(F.eUsd),bs:n(F.eBs),mesfact:$('#eMesFact').value||null} }
+let eTipo='';
+function setTipo(t){ eTipo=t||''; const c=eTipo==='consumo'; document.querySelectorAll('#eTipo button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===eTipo)));
+  $('#nochesF').hidden=c; $('#lblIn').textContent=c?'Hospedado desde (referencia)':'Check-in'; $('#lblOut').textContent=c?'Hasta (referencia)':'Check-out';
+  F.eIn.required=!c; F.eOut.required=!c; $('#eTipoH').textContent=c?'Solo se paga el consumo: no cuenta noches ni aparece en llegadas/salidas. Las fechas son opcionales, como referencia.':'';
+  if(c){ F.eNoches.value=0; if(!F.eObs.value) F.eObs.value='CONSUMOS' } checkCruce(); renderExt() }
+document.querySelectorAll('#eTipo button').forEach(b=>b.onclick=()=>setTipo(b.dataset.t));
+$('#newConsBtn').onclick=()=>{ openSheet(null,{tipo:'consumo',hotel:allHotels()[upN($('#fHotel').value)]?.nombre||'',contrato:$('#fContrato').value||'',status:'POR PAGAR'}) };
 async function save(){
   const dn=_dupNext;
   if(!db){toast('Sin conexión con la base de datos: no se pudo guardar.');return}
   const hn=F.eHotel.value.trim().toUpperCase().replace(/\s+/g,' ');
   if(!hn){F.eHotel.focus();toast('Indica el hotel.');return}
   if(!F.ePax.value.trim()){F.ePax.focus();toast('Indica el nombre del pasajero.');return}
-  if(!F.eIn.value||!F.eOut.value){toast('Indica las fechas de check-in y check-out.');return}
+  if(eTipo!=='consumo'&&(!F.eIn.value||!F.eOut.value)){toast('Indica las fechas de check-in y check-out.');return}
   if(F.eOut.value<F.eIn.value){toast('El check-out no puede ser antes del check-in.');return}
   checkCruce(); if(findCruces().length&&!cruceOk){cruceOk=true;$('#saveBtn').textContent='Guardar de todos modos';$('#cruceBox').scrollIntoView({block:'center',behavior:'smooth'});toast('Hay fechas cruzadas con otra reserva. Revisa el aviso; si es correcto, pulsa “Guardar de todos modos”.');return}
   const rec=collect(); rec.editado=new Date().toISOString(); rec.grupo=pendingGroup?pendingGroup.gid:(editing?.grupo||null); const pg=pendingGroup;
@@ -1370,10 +1382,10 @@ async function exportXlsx(){
 
 /* ---------- events ---------- */
 ['#fDesde','#fHasta','#fTipo','#fRet','#fNS'].forEach(x=>$(x).addEventListener('change',()=>{page=0;render()}));
-['#q','#fFac','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'||s==='#fFac'?'input':'change',()=>{page=0;render()}));
+['#q','#fFac','#fHotel','#fContrato','#fStatus','#fMes','#fCruce','#fPend','#fTReg'].forEach(s=>$(s).addEventListener(s==='#q'||s==='#fHotel'||s==='#fFac'?'input':'change',()=>{page=0;render()}));
 function setPago(v){ fPago=v; $('#fPend').checked=v==='pend'; document.querySelectorAll('#fPago button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===v))); page=0; render() }
 document.querySelectorAll('#fPago button').forEach(b=>b.onclick=()=>setPago(b.dataset.p));
-$('#clearBtn').onclick=()=>{fPago='';document.querySelectorAll('#fPago button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p==='')));$('#q').value='';$('#fFac').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
+$('#clearBtn').onclick=()=>{fPago='';$('#fTReg').value='';document.querySelectorAll('#fPago button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p==='')));$('#q').value='';$('#fFac').value='';$('#fTipo').value='in';['#fHotel','#fContrato','#fStatus','#fMes','#fDesde','#fHasta'].forEach(s=>$(s).value='');$('#fCruce').checked=false;$('#fPend').checked=false;$('#fRet').value='';$('#fNS').value='';page=0;render()};
 $('#tbl thead').addEventListener('click',e=>{if(e.target.id==='selAll'){const on=e.target.checked;for(const r of curList){const k=r.slug+'|'+r.id;on?sel.add(k):sel.delete(k);(r.xs||[]).forEach((x,i)=>{on?selX.add(k+'|'+i):selX.delete(k+'|'+i)})}render();updSel();return}const th=e.target.closest('th');if(!th||th.classList.contains('sel'))return;const k=th.dataset.k;sort=sort.k===k?{k,d:-sort.d}:{k,d:k==='in'||k==='out'?-1:1};const o=sort.k+':'+sort.d;$('#fOrden').value=[...$('#fOrden').options].some(x=>x.value===o)?o:'';render()});
 $('#fOrden').addEventListener('change',()=>{const [k,d]=$('#fOrden').value.split(':');if(k){sort={k,d:+d};page=0;try{localStorage.setItem('orden-reservas',$('#fOrden').value)}catch(e){}render()}});
 try{const o=localStorage.getItem('orden-reservas');if(o&&[...$('#fOrden').options].some(x=>x.value===o)){$('#fOrden').value=o;const [k,d]=o.split(':');sort={k,d:+d}}}catch(e){}
@@ -1426,7 +1438,7 @@ function longDate(s){const d=new Date(s+'T12:00:00');return DIAS[d.getDay()]+' '
 const RT={pagos:{t:'Pagos diarios',lbl:'Fecha de llegada',sub:'Reservas POR PAGAR con llegada el'},llegadas:{t:'Llegadas del día',lbl:'Fecha de check-in',sub:'Huéspedes con check-in el'},salidas:{t:'Salidas del día',lbl:'Fecha de check-out',sub:'Huéspedes con check-out el'}};
 function reportData(){
   const d=$('#rDate').value; if(!d) return {d,groups:[],n:0};
-  let rs=rows.filter(r=>rType==='salidas'?r.out===d:r.in===d);
+  let rs=rows.filter(r=>(rType==='salidas'?r.out===d:r.in===d)&&(rType==='pagos'||r.tipo!=='consumo'));
   if(rType==='pagos') rs=rs.filter(r=>r.isPend);
   const PG=rType==='pagos', vU=r=>PG?r.pusd:r.tusd, vB=r=>PG?r.pbs:r.tbs;
   // shared payments: show group total once
@@ -1928,7 +1940,7 @@ function ccNameMatch(A,B){for(const a of A)for(const b of B){const I=[...a].filt
 function ccCompute(){
   const mes=$('#ccMes').value; if(!mes||!ccFact) return null;
   const conts=new Set($('#ccCont').value.split(',').map(ccUp).filter(Boolean));
-  const H=rows.filter(r=>conts.has(ccUp(r.contrato))&&(r.mesfact||String(r.in||'').slice(0,7))===mes&&r.in).map(r=>{const ns=isNoShow(r);return {r,ns,names:ccNames(r.pasajero),n:new Set(ccNights(r.in,r.out,ns,''))}});
+  const H=rows.filter(r=>r.tipo!=='consumo'&&conts.has(ccUp(r.contrato))&&(r.mesfact||String(r.in||'').slice(0,7))===mes&&r.in).map(r=>{const ns=isNoShow(r);return {r,ns,names:ccNames(r.pasajero),n:new Set(ccNights(r.in,r.out,ns,''))}});
   const F=ccFact.filter(x=>!x.periodo||x.periodo===mes).map(x=>({x,names:ccNames(x.nombre),n:new Set(x.cin?ccNights(x.cin,x.cout,x.ns,''):[]),used:false}));
   const fTxt=f=>`<div><b>${esc(f.x.hotel||'')}</b> <span class="mut">${esc(f.x.ref||'')}${f.x.fila?' · fila '+f.x.fila:''}</span></div><div>${esc(f.x.nombre)} · ${ccTxt(f.x.cin,f.x.cout,f.x.ns)}</div>`;
   const hTxt=h=>`<div><b>${esc(h.r.hotel)}</b> <span class="mut">${esc(h.r.contrato||'')}</span></div><div>${ccTxt(h.r.in,h.r.out,h.ns)}</div>`;
