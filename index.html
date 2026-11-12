@@ -266,6 +266,12 @@ td.gcell{cursor:pointer}td.gcell:hover{background:#efe2c8!important}
 #tbl tbody tr.r-pend td:first-child{box-shadow:inset 4px 0 0 #e0a43a}#tbl tbody tr.r-pag td:first-child{box-shadow:inset 4px 0 0 #3a9a6a}
 .gmix{display:block;font-size:11px;margin-top:2px;color:#8a5a14;font-weight:600}
 .conschip{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:999px;background:#efe3f7;color:#6a3a8a;white-space:nowrap}
+#sheet.cons-mode .hidecons,#sheet.cons-mode #extBox,#sheet.cons-mode #cruceBox,#sheet.cons-mode #yearBox{display:none!important}
+#sheet.cons-mode header{background:#4a2a63!important;border-bottom-color:#b88ad6!important}
+#sheet.cons-mode form{background:#fbf7fd}
+#sheet.cons-mode .sec{color:#6a3a8a;border-color:#d9c3ea}
+.consban{display:none}#sheet.cons-mode .consban{display:flex;gap:10px;align-items:center;grid-column:1/-1;background:#efe3f7;border:1px solid #d9c3ea;color:#4a2a63;border-radius:10px;padding:10px 12px;font-size:13px}
+.consban b{font-size:15px}
 .flag{color:var(--bad);font-weight:700;margin-left:4px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:12px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
@@ -536,20 +542,21 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="warnbox" id="cruceBox" hidden></div>
     <div class="infobox" id="extBox" hidden></div>
     <div class="warnbox" id="yearBox" hidden></div>
+    <div class="consban"><span style="font-size:22px">🍽</span><div><b>Consumo</b><br>Solo se paga el consumo del huésped. No lleva fechas ni noches.</div></div>
     <div class="f full"><span class="qlabel">Tipo de registro</span><div class="seg" id="eTipo"><button type="button" data-t="" aria-pressed="true">🛏 Hospedaje</button><button type="button" data-t="consumo" aria-pressed="false">🍽 Solo consumos</button></div><span class="hint" id="eTipoH"></span></div>
     <div class="f full"><label for="eHotel">Hotel</label><input id="eHotel" list="dlHotel" required placeholder="Escribe o elige un hotel"></div>
     <div class="f"><label for="eContrato">Contrato</label><input id="eContrato" list="dlContrato" placeholder="P1 LAURA, OW, METOR…"></div>
     <div class="f"><label for="eStatus">Status</label><input id="eStatus" list="dlStatus" value="POR PAGAR"></div>
-    <label class="check full nsbox"><input type="checkbox" id="eNoShow"> <b>NO SHOW</b> &nbsp;<span class="hint">el huésped no llegó (aparte del status de pago)</span></label>
+    <label class="check full nsbox hidecons"><input type="checkbox" id="eNoShow"> <b>NO SHOW</b> &nbsp;<span class="hint">el huésped no llegó (aparte del status de pago)</span></label>
     <div class="f full"><span class="qlabel">Status de pago</span><div class="quick" id="quickStatus">
       <button type="button" class="chip ok" data-s="PAGADO">PAGADO</button>
       <button type="button" class="chip warn" data-s="POR PAGAR">POR PAGAR</button>
       <button type="button" class="chip warn" data-s="PENDIENTE">PENDIENTE</button>
       <button type="button" class="chip ok" data-s="PAGADO CON SF">PAGADO CON SF</button>
     </div></div>
-    <div class="f full"><label for="ePax">Nombre del pasajero</label><input id="ePax" required placeholder="Varios pasajeros: separa con “ - ”"></div>
-    <div class="f"><label for="eIn" id="lblIn">Check-in</label><input id="eIn" type="date" required></div>
-    <div class="f"><label for="eOut" id="lblOut">Check-out</label><input id="eOut" type="date" required></div>
+    <div class="f full"><label for="ePax" id="lblPax">Nombre del pasajero</label><input id="ePax" required placeholder="Varios pasajeros: separa con “ - ”"></div>
+    <div class="f hidecons"><label for="eIn" id="lblIn">Check-in</label><input id="eIn" type="date" required></div>
+    <div class="f hidecons"><label for="eOut" id="lblOut">Check-out</label><input id="eOut" type="date" required></div>
     <div class="f" id="nochesF"><label for="eNoches">Noches</label><input id="eNoches" type="number" min="0" step="1"></div>
     <div class="f"><label for="eObs">Observación</label><input id="eObs" list="dlObs" placeholder="SIN COMIDAS, DESAYUNO…"></div>
     <div class="notas full"><span class="qlabel">Notas</span><div id="nList"></div><div class="nadd"><textarea id="nTxt" rows="2" placeholder="Escribe una nota o comentario sobre esta reserva…"></textarea><button type="button" id="nAdd">Agregar nota</button></div></div>
@@ -559,7 +566,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="f"><label for="eUsd" id="lblUsd">Monto $</label><input id="eUsd" type="number" step="0.01" min="0"></div>
     <div class="f"><label for="eBcv">Tasa BCV</label><input id="eBcv" type="number" step="0.01" min="0"></div>
     <div class="f"><label for="eBs">Monto Bs</label><input id="eBs" type="number" step="0.01" min="0"></div>
-    <div class="f"><label for="eTarifa">Tarifa</label><input id="eTarifa" type="number" step="0.01" min="0"></div>
+    <div class="f hidecons"><label for="eTarifa">Tarifa</label><input id="eTarifa" type="number" step="0.01" min="0"></div>
     <div class="f"><label for="eFactura">Factura</label><input id="eFactura"></div>
     <div class="f"><label for="ePresu">Presupuesto</label><input id="ePresu"></div>
     <div class="f"><label for="eMesFact">Mes de facturación</label><input id="eMesFact" type="month" placeholder="AAAA-MM"><span class="hint" id="eMesFactH">Vacío = mes de entrada</span></div>
@@ -1016,7 +1023,7 @@ async function buildPayImg(){
     for(const i of P.xs){const x=r.xs[i];if(x&&x.n)L.push(x.n+(P.hab?'':(x.c?' ('+x.c.toLowerCase()+')':'')))}
     const v=L.join(', ');facMemo.set(r,v);return v};
   const hasF=rs.some(r=>facOf(r));
-  const C=[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
+  const soloC=rs.every(r=>r.tipo==='consumo'); const C=soloC?[['n','N°',44,'c'],['pax','Pasajero',0,'l']]:[['n','N°',44,'c'],['pax','Pasajero',0,'l'],['in','Check-in',112,'c'],['out','Check-out',112,'c'],['noc','Noches',78,'c']];
   if(hasF) C.push(['fac','Factura',118,'c']); if(showU) C.push(['mon',ML,140,'r']); if(showBs) C.push(['bs','Monto Bs',showU?140:160,'r']);
   C[1][2]=928-C.reduce((a,c)=>a+c[2],0); const cols=C.map(c=>[c[1],c[2],c[3],c[0]]), ix=k=>cols.findIndex(c=>c[3]===k), xOf=k=>X0+cols.slice(0,ix(k)).reduce((a,c)=>a+c[1],0), wOf=k=>cols[ix(k)][1];
   const cv=document.createElement('canvas'), g=cv.getContext('2d'), F=(w,sz)=>`${w} ${sz}px system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
@@ -1041,7 +1048,7 @@ async function buildPayImg(){
   g.fillStyle=NAVY; g.fillRect(0,0,W,104); g.fillStyle=SAND; g.fillRect(0,104,W,5);
   g.textBaseline='middle'; g.font=F(800,36); g.fillStyle=SAND; g.fillText('ONE',36,52); const ow=g.measureText('ONE').width; g.fillStyle='#fff'; g.fillText('WAY',36+ow,52);
   g.font=F(400,13); g.fillStyle='#cfd8e2'; g.fillText('TRAVEL AGENCY',38,82);
-  g.textAlign='right'; g.font=F(700,22); g.fillStyle='#fff'; g.fillText('RELACIÓN DE RESERVAS A PAGAR',W-36,44); g.font=F(400,15); g.fillStyle='#cfd8e2'; g.fillText('Fecha: '+fd(todayStr()),W-36,72); g.textAlign='left';
+  g.textAlign='right'; g.font=F(700,22); g.fillStyle='#fff'; g.fillText(rs.every(r=>r.tipo==='consumo')?'RELACIÓN DE CONSUMOS A PAGAR':'RELACIÓN DE RESERVAS A PAGAR',W-36,44); g.font=F(400,15); g.fillStyle='#cfd8e2'; g.fillText('Fecha: '+fd(todayStr()),W-36,72); g.textAlign='left';
   let y=140; const TW=W-72;
   const put=(t,k,yy,a)=>{const x=xOf(k),w=wOf(k);g.textAlign=a==='c'?'center':a==='r'?'right':'left';g.fillText(t,a==='c'?x+w/2:a==='r'?x+w-10:x+10,yy);g.textAlign='left'};
   for(const {h,rws} of plan){
@@ -1050,7 +1057,7 @@ async function buildPayImg(){
     for(const [l,w,a,k] of cols) put(l.toUpperCase(),k,y+19,a); y+=38;
     let tn=0,tu=0,te=0,tb=0;
     rws.forEach(({r,lines,fl,h:rh},i)=>{ g.fillStyle=i%2?'#faf6ef':'#fff'; g.fillRect(X0,y,TW,rh); g.fillStyle=LINE; g.fillRect(X0,y+rh-1,TW,1); const cy=y+rh/2;
-      g.fillStyle=INK; g.font=F(400,16); put(String(i+1),'n',cy,'c'); put(fd(r.in),'in',cy,'c'); put(fd(r.out),'out',cy,'c'); put(r.tipo==='consumo'?'Consumo':(r.noches!=null?String(r.noches):''),'noc',cy,'c');
+      g.fillStyle=INK; g.font=F(400,16); put(String(i+1),'n',cy,'c'); if(!soloC){ put(fd(r.in),'in',cy,'c'); put(fd(r.out),'out',cy,'c'); put(r.tipo==='consumo'?'Consumo':(r.noches!=null?String(r.noches):''),'noc',cy,'c') }
       g.font=F(600,17); lines.forEach((ln,j)=>g.fillText(ln,xOf('pax')+10,cy-(lines.length-1)*11+j*22));
       if(hasF){ g.font=F(500,15); g.fillStyle=INK; fl.forEach((ln,j)=>put(ln,'fac',cy-(fl.length-1)*9+j*18,'c')); g.fillStyle=INK }
       if(showU){ g.font=F(700,16); put(amt(r),'mon',cy,'r') } if(showBs){ g.font=F(showU?400:700,16); put(bOf(r)!=null?(showU?'':'Bs ')+fmt2.format(bOf(r)):'—','bs',cy,'r') }
@@ -1285,7 +1292,7 @@ function collect(){
   const up=v=>v.trim().toUpperCase().replace(/\s+/g,' ');
   const r={tipo:eTipo||null,contrato:up(F.eContrato.value),pasajero:up(F.ePax.value),in:F.eIn.value,out:F.eOut.value,status:up(F.eStatus.value),obs:up(F.eObs.value),factura:F.eFactura.value.trim(),presupuesto:up(F.ePresu.value)};
   for(const [k,el] of [['noches',F.eNoches],['usd',F.eUsd],['bcv',F.eBcv],['bs',F.eBs],['tarifa',F.eTarifa]]){const v=parseFloat(el.value);r[k]=isFinite(v)?Math.round(v*100)/100:null}
-  if(eTipo==='consumo') r.noches=0;
+  if(eTipo==='consumo'){ r.noches=0; r.in=null; r.out=null; r.tarifa=null; r.noshow=false }
   for(const k of Object.keys(r)) if(r[k]===''||r[k]==null) r[k]=null;
   const X=xRead(); r.facturas=X.length?X:null; r.ret_ok=$('#eRetOk').checked; r.noshow=$('#eNoShow').checked; if(/^\s*NO SHOW\s*$/i.test(r.status||'')) r.status=null; r.ret_comp=$('#eRetComp').value.trim()||null; r.mesfact=$('#eMesFact').value||null; { const pend=$('#nTxt').value.trim(); if(pend){ notas=[...notas,{t:pend,por:(document.getElementById('uName')?.textContent||'').split(' · ')[0]||null,el:new Date().toISOString()}]; $('#nTxt').value='' } r.notas=notas.length?notas:null; }
   { const A=aRead(); r.abonos=A.length?A:null; const tot=parseFloat(F.eUsd.value), pu=A.reduce((s,e)=>s+(e.usd||0),0), su=(r.status||'').toUpperCase();
@@ -1305,8 +1312,9 @@ function dupData(fromForm){ const v=x=>x.value.trim(), n=x=>{const f=parseFloat(
   return {dup:true,tipo:eTipo||'',hotel:v(F.eHotel),contrato:v(F.eContrato),status:'POR PAGAR',in:F.eIn.value,out:F.eOut.value,noches:n(F.eNoches),obs:v(F.eObs),bcv:n(F.eBcv),tarifa:n(F.eTarifa),usd:n(F.eUsd),bs:n(F.eBs),mesfact:$('#eMesFact').value||null} }
 let eTipo='';
 function setTipo(t){ eTipo=t||''; const c=eTipo==='consumo'; document.querySelectorAll('#eTipo button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===eTipo)));
-  $('#nochesF').hidden=c; $('#lblIn').textContent=c?'Hospedado desde (referencia)':'Check-in'; $('#lblOut').textContent=c?'Hasta (referencia)':'Check-out';
-  F.eIn.required=!c; F.eOut.required=!c; $('#eTipoH').textContent=c?'Solo se paga el consumo: no cuenta noches ni aparece en llegadas/salidas. Las fechas son opcionales, como referencia.':'';
+  $('#nochesF').hidden=c; $('#sheet').classList.toggle('cons-mode',c); $('#lblPax').textContent=c?'Pasajero(s) del consumo':'Nombre del pasajero';
+  { const t=$('#sheetTitle').textContent; if(c&&!/consumo/i.test(t)) $('#sheetTitle').textContent=editing?'Editar consumo':'Nuevo consumo'; if(!c&&/consumo/i.test(t)) $('#sheetTitle').textContent=editing?'Editar reserva':'Nueva reserva' }
+  F.eIn.required=!c; F.eOut.required=!c; $('#eTipoH').textContent='';
   if(c){ F.eNoches.value=0; if(!F.eObs.value) F.eObs.value='CONSUMOS' } checkCruce(); renderExt() }
 document.querySelectorAll('#eTipo button').forEach(b=>b.onclick=()=>setTipo(b.dataset.t));
 $('#newConsBtn').onclick=()=>{ openSheet(null,{tipo:'consumo',hotel:allHotels()[upN($('#fHotel').value)]?.nombre||'',contrato:$('#fContrato').value||'',status:'POR PAGAR'}) };
