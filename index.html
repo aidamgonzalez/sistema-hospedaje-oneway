@@ -529,7 +529,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>Reserva en hospedaje</th><th>Lo que está facturado</th><th>Qué revisar</th></tr></thead><tbody></tbody></table></div>
   </section>
   <section id="view-hoteles" hidden>
-    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span><span class="spacer" style="flex:1"></span><button type="button" id="hPdf">📄 PDF de hoteles por ciudad</button></div>
+    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span><span class="spacer" style="flex:1"></span><button type="button" id="hPdf">📄 PDF de hoteles por ciudad</button><button type="button" id="nPdf">📊 PDF noches por mes y contrato</button></div>
     <div class="tablebox" id="hFacBox" hidden style="margin-bottom:16px"><table id="hFacTbl"><thead><tr><th>Factura</th><th>Hotel</th><th>Contrato</th><th>Pasajero</th><th>Check-in</th><th>Check-out</th><th class="num">Noches</th><th>Status</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th></tr></thead><tbody></tbody></table></div>
     <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
   </section>
@@ -1831,6 +1831,44 @@ async function hotelsPdf(){
   await saveFile(`HOTELES POR CIUDAD ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
 }
 $('#hPdf').onclick=hotelsPdf;
+async function nochesPdf(){
+  const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
+  const MES=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'], MESL=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const Y=String(year), add=(d,n)=>{const t=new Date(d+'T12:00:00Z');t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10)};
+  const M=Array.from({length:12},()=>({n:0,res:0})), C={};
+  for(const r of rows){ if(r.tipo==='consumo'||!r.in) continue; const k=(upN(r.contrato)||'SIN CONTRATO');
+    let ds=[]; if(isNoShow(r)) ds=[r.in]; else if(r.out&&r.out>r.in){ let d=r.in,g=0; while(d<r.out&&g<400){ds.push(d);d=add(d,1);g++} } else if(num(r.noches)) { let d=r.in; for(let i=0;i<r.noches;i++){ds.push(d);d=add(d,1)} }
+    if(r.in.startsWith(Y)) M[+r.in.slice(5,7)-1].res++;
+    for(const d of ds){ if(!d.startsWith(Y)) continue; const m=+d.slice(5,7)-1; M[m].n++; ((C[k]=C[k]||Array(12).fill(0))[m])++ } }
+  const last=Math.max(1,...M.map((m,i)=>m.n?i+1:0)), act=M.slice(0,last), tot=act.reduce((a,m)=>a+m.n,0), totR=act.reduce((a,m)=>a+m.res,0);
+  const cur=Y===todayStr().slice(0,4)?+todayStr().slice(5,7):(Y<todayStr().slice(0,4)?13:1), nC=Math.max(1,Math.min(last,cur-1)), cM=M.slice(0,nC), totC=cM.reduce((a,m)=>a+m.n,0), totRC=cM.reduce((a,m)=>a+m.res,0), diasC=cM.reduce((a,_,i)=>a+new Date(+Y,i+1,0).getDate(),0), tag=i=>i+1===cur?' (en curso)':(i+1>cur?' (reservas a futuro)':'');
+  if(!tot){toast('No hay noches registradas en '+Y+'.');return}
+  const dim=m=>new Date(+Y,m+1,0).getDate(), f1=v=>v.toLocaleString('es-VE',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const doc=new J({orientation:'landscape',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), navy=[16,40,63], sand=[201,153,95];
+  const head=(t,sub)=>{doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...sand);doc.text('ONE',40,44);doc.setTextColor(...navy);doc.text('WAY',40+doc.getTextWidth('ONE'),44);doc.setFontSize(13);doc.setTextColor(22,40,58);doc.text(t,W-40,40,{align:'right'});doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(93,111,128);doc.text(sub,W-40,56,{align:'right'})};
+  const st={theme:'grid',showFoot:'lastPage',margin:{left:40,right:40},styles:{fontSize:9,cellPadding:4,lineColor:[219,226,234],lineWidth:.5,textColor:[22,40,58]},headStyles:{fillColor:navy,textColor:255},footStyles:{fillColor:[241,231,214],textColor:[22,40,58],fontStyle:'bold'}};
+  head('PROMEDIO DE NOCHES SOLICITADAS '+Y,`Enero a ${MESL[last-1]} · generado el ${fd(todayStr())}`);
+  // resumen
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...navy);
+  doc.text(`Promedio mensual: ${f1(totC/nC)} noches  ·  Promedio diario: ${f1(totC/diasC)} noches  ·  calculado con ${nC} meses cerrados (Enero a ${MESL[nC-1]}: ${fmt0.format(totC)} noches)`,40,82);
+  doc.autoTable({...st,startY:94,head:[['Mes','Noches','Reservas (check-in en el mes)','Promedio noches por reserva','Promedio noches por día','% del total']],
+    body:act.map((m,i)=>[MESL[i]+tag(i),fmt0.format(m.n),fmt0.format(m.res),m.res?f1(m.n/m.res):'—',f1(m.n/dim(i)),f1(m.n/tot*100)+' %']),
+    foot:[['PROMEDIO MENSUAL (meses cerrados)',f1(totC/nC),f1(totRC/nC),totRC?f1(totC/totRC):'—',f1(totC/diasC),'']],
+    columnStyles:{0:{fontStyle:'bold'},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}},
+    didParseCell:h=>{if((h.section==='head'||h.section==='foot')&&h.column.index>0)h.cell.styles.halign='right'}});
+  // por contrato
+  const K=Object.entries(C).map(([k,a])=>({k,a:a.slice(0,last),t:a.slice(0,last).reduce((x,y)=>x+y,0)})).filter(o=>o.t).sort((a,b)=>b.t-a.t);
+  doc.addPage(); head('NOCHES POR CONTRATO Y MES '+Y,`${K.length} contratos · ordenados de mayor a menor`);
+  doc.autoTable({...st,startY:76,styles:{...st.styles,fontSize:7.5,cellPadding:3},
+    head:[['Contrato',...MES.slice(0,last),'Total','Prom. mensual','% del total']],
+    body:K.map(o=>[o.k,...o.a.map(v=>v?fmt0.format(v):'·'),fmt0.format(o.t),f1(o.a.slice(0,nC).reduce((x,y)=>x+y,0)/nC),f1(o.t/tot*100)+' %']),
+    foot:[['TOTAL',...act.map(m=>fmt0.format(m.n)),fmt0.format(tot),f1(totC/nC),'100 %']],
+    columnStyles:Object.fromEntries([[0,{fontStyle:'bold',cellWidth:110}],...Array.from({length:last+3},(_,i)=>[i+1,{halign:'right'}])]),
+    didParseCell:h=>{if((h.section==='head'||h.section==='foot')&&h.column.index>0)h.cell.styles.halign='right'}});
+  const n=doc.internal.getNumberOfPages(); for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(140);doc.text(`One Way Travel Agency · Noches contadas en el mes en que ocurren. Promedios con meses cerrados. Sin consumos; NO SHOW = 1 noche. · Página ${i} de ${n}`,W/2,H-20,{align:'center'})}
+  await saveFile(`PROMEDIO NOCHES ${Y} ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
+}
+$('#nPdf').onclick=nochesPdf;
 async function credPdf(){
   const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
   const doc=new J({orientation:'portrait',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), navy=[16,80,122], sand=[201,153,95];
