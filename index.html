@@ -529,7 +529,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="tablebox"><table id="ccTbl"><thead><tr><th>Estado</th><th>Huésped</th><th>Reserva en hospedaje</th><th>Lo que está facturado</th><th>Qué revisar</th></tr></thead><tbody></tbody></table></div>
   </section>
   <section id="view-hoteles" hidden>
-    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span><span class="spacer" style="flex:1"></span><button type="button" id="hPdf">📄 PDF de hoteles por ciudad</button><button type="button" id="nPdf">📊 PDF noches por mes y contrato</button></div>
+    <div class="facsearch"><div class="f"><label for="hFac">Buscar por N° de factura</label><input id="hFac" type="search" inputmode="numeric" placeholder="Ej. 752"></div><span class="hint" id="hFacN"></span><span class="spacer" style="flex:1"></span><button type="button" id="hPdf">📄 PDF de hoteles por ciudad</button><button type="button" id="nPdf">📊 PDF noches por mes y contrato</button><button type="button" id="pPdf" class="primary">🟡 Por pagar de todos los hoteles</button></div>
     <div class="tablebox" id="hFacBox" hidden style="margin-bottom:16px"><table id="hFacTbl"><thead><tr><th>Factura</th><th>Hotel</th><th>Contrato</th><th>Pasajero</th><th>Check-in</th><th>Check-out</th><th class="num">Noches</th><th>Status</th><th class="num">Monto $ / €</th><th class="num">Monto Bs</th></tr></thead><tbody></tbody></table></div>
     <div class="tablebox"><table id="tblH"><thead></thead><tbody></tbody></table></div>
   </section>
@@ -1869,6 +1869,33 @@ async function nochesPdf(){
   await saveFile(`PROMEDIO NOCHES ${Y} ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
 }
 $('#nPdf').onclick=nochesPdf;
+async function porPagarPdf(){
+  const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
+  const P=rows.filter(r=>r.isPend); if(!P.length){toast('No hay reservas por pagar en '+year+'.');return}
+  const by={}; for(const r of P)(by[r.hotel]=by[r.hotel]||[]).push(r);
+  const H=Object.entries(by).map(([h,L])=>{const pc=hotelPct(h),u=L.reduce((a,r)=>a+(r.pusd||0),0),b=L.reduce((a,r)=>a+(r.pbs||0),0);return {h,L:L.sort((a,b)=>(a.in||'').localeCompare(b.in||'')),pc,eur:L[0].moneda==='EUR',u,b,ri:retOf(b,pc),is:islrOf(b,pc)}}).sort((a,b)=>b.b-a.b||b.u-a.u);
+  const doc=new J({orientation:'landscape',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), Hh=doc.internal.pageSize.getHeight(), navy=[16,40,63], sand=[201,153,95];
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...sand);doc.text('ONE',40,44);doc.setTextColor(...navy);doc.text('WAY',40+doc.getTextWidth('ONE'),44);
+  doc.setFontSize(13);doc.setTextColor(22,40,58);doc.text('RESERVAS POR PAGAR · TODOS LOS HOTELES',W-40,40,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(93,111,128);doc.text(`${P.length} reservas en ${H.length} hoteles · ${fd(todayStr())} · Bs calculados con la tasa BCV de hoy`,W-40,56,{align:'right'});
+  const st={theme:'grid',showFoot:'lastPage',margin:{left:40,right:40},styles:{fontSize:8,cellPadding:3,lineColor:[219,226,234],lineWidth:.5,textColor:[22,40,58]},headStyles:{fillColor:navy,textColor:255},footStyles:{fillColor:[241,231,214],textColor:[22,40,58],fontStyle:'bold'}};
+  const TU=H.filter(x=>!x.eur).reduce((a,x)=>a+x.u,0), TE=H.filter(x=>x.eur).reduce((a,x)=>a+x.u,0), TB=H.reduce((a,x)=>a+x.b,0), TR=H.reduce((a,x)=>a+x.ri+x.is,0);
+  doc.autoTable({...st,startY:72,head:[['Hotel','Reservas','Por pagar $ / €','Por pagar Bs','Retención IVA','Retención ISLR','A pagar al hotel Bs']],
+    body:H.map(x=>[x.h,String(x.L.length),x.u||x.b?(x.eur?'€ ':'$ ')+fmt2.format(x.u):'sin monto cargado',x.u||x.b?fmt2.format(x.b):'—',x.ri?fmt2.format(x.ri):'—',x.is?fmt2.format(x.is):'—',fmt2.format(x.b-x.ri-x.is)]),
+    foot:[['TOTAL',String(P.length),'$ '+fmt2.format(TU)+(TE?'  /  € '+fmt2.format(TE):''),fmt2.format(TB),'','',fmt2.format(TB-TR)]],
+    columnStyles:{0:{fontStyle:'bold',cellWidth:170},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right',fontStyle:'bold'}},
+    didParseCell:h=>{if((h.section==='head'||h.section==='foot')&&h.column.index>0)h.cell.styles.halign='right'}});
+  doc.addPage(); let y=40;
+  for(const x of H){
+    doc.autoTable({...st,showFoot:'lastPage',startY:y,
+      head:[[{content:`${x.h}   ·   ${x.L.length} por pagar   ·   ${(x.eur?'€ ':'$ ')+fmt2.format(x.u)}   ·   Bs ${fmt2.format(x.b)}   ·   Retención: ${pctLbl(x.pc)}`,colSpan:9,styles:{halign:'left',fillColor:sand,textColor:[22,40,58],fontStyle:'bold',fontSize:9}}],['Contrato','Pasajero','Check-in','Check-out','Noches','Status','Factura',x.eur?'Por pagar €':'Por pagar $','Por pagar Bs']],
+      body:x.L.map(r=>[r.contrato||'',r.pasajero+(r.tipo==='consumo'?' (consumo)':'')+(r.grupo&&r.pusd==null?' (pago compartido)':''),fd(r.in),fd(r.out),r.tipo==='consumo'?'—':(r.noches??''),stLimpio(r.status)||'',[r.factura,...(r.facturas||[]).map(e=>e.numero)].filter(Boolean).join(', '),r.pusd!=null?fmt2.format(r.pusd):'—',r.pbs!=null?fmt2.format(r.pbs):'—']),
+      columnStyles:{1:{cellWidth:180},4:{halign:'right'},7:{halign:'right'},8:{halign:'right'}}});
+    y=doc.lastAutoTable.finalY+14; if(y>Hh-80){doc.addPage();y=40} }
+  const n=doc.internal.getNumberOfPages(); for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(140);doc.text(`One Way Travel Agency · Por pagar ${year} · Página ${i} de ${n}`,W/2,Hh-20,{align:'center'})}
+  await saveFile(`POR PAGAR TODOS LOS HOTELES ${fd(todayStr()).replace(/\//g,'-')}.pdf`,doc.output('arraybuffer'));
+}
+$('#pPdf').onclick=porPagarPdf;
 async function credPdf(){
   const J=window.jspdf&&window.jspdf.jsPDF; if(!J){toast('No se pudo cargar el generador de PDF.');return}
   const doc=new J({orientation:'portrait',unit:'pt',format:'letter'}), W=doc.internal.pageSize.getWidth(), navy=[16,80,122], sand=[201,153,95];
